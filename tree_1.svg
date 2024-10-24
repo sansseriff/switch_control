@@ -1,0 +1,55 @@
+<svg width="817" height="1094" viewBox="0 0 817 1094" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Group 35">
+<g id="Group 36">
+<circle id="Ellipse 37" cx="794.5" cy="1071.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 38" cx="794.5" cy="922.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 39" cx="794.5" cy="772.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 40" cx="794.5" cy="622.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 41" cx="794.5" cy="472.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 42" cx="794.5" cy="322.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 46" cx="606.5" cy="97.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 47" cx="606.5" cy="397.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 48" cx="606.5" cy="697.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 50" cx="418.5" cy="847.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 51" cx="418.5" cy="247.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 52" cx="230.5" cy="547.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 49" cx="606.5" cy="997.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 43" cx="794.5" cy="172.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+<circle id="Ellipse 44" cx="794.5" cy="22.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
+</g>
+<g id="Group 34">
+<path id="Rectangle 186" d="M607 998L795 1073" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 188" d="M607 698L795 773" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 194" d="M419 848L607 998" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 196" d="M419 248L607 398" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 198" d="M231 548L419 848" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 190" d="M607 398L795 473" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 192" d="M607 98L795 173" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 187" d="M607 998L795 923" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 189" d="M607 698L795 623" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 195" d="M419 848L607 698" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 197" d="M419 248L607 98" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 199" d="M231 548L419 248" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 191" d="M607 398L795 323" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Rectangle 193" d="M607 98L795 23" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+<path id="Vector 79" d="M230.5 548H10" stroke="#EBEBEB" stroke-width="20" stroke-linecap="round"/>
+</g>
+<g id="Group 37">
+<path id="R7_bottom" d="M607 98L795 173" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R7_top" d="M607 98L795 23" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R6_bottom" d="M607 398L795 473" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R6_top" d="M607 398L795 323" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R5_bottom" d="M607 698L795 773" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R5_top" d="M607 698L795 623" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R4_bottom" d="M607 998L795 1073" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R4_top" d="M607 998L795 923" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R3_bottom" d="M419 248L607 398" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R3_top" d="M419 248L607 98" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R2_bottom" d="M419 848L607 998" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R2_top" d="M419 848L607 698" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R1_top" d="M231 548L419 248" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="R1_bottom" d="M231 548L419 848" stroke="black" stroke-width="20" stroke-linecap="round"/>
+<path id="Vector 80" d="M230.5 548H10" stroke="black" stroke-width="20" stroke-linecap="round"/>
+</g>
+</g>
+</svg>

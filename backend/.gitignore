@@ -1,0 +1,9 @@
+.venv
+
+backend/dist/
+backend/build/
+backend/__pycache__/
+
+.DS_Store
+switch_control/.vscode/
+.vscode/
