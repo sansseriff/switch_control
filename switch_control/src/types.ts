@@ -6,6 +6,7 @@ export interface ButtonState {
     proxy_name: string;
     idx: number;
     value: boolean;
+    default_name: string;
   }
 
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tree } from "../state.svelte";
   interface Props {
     name: string;
   }
@@ -8,7 +9,7 @@
 <div class="container">
   <div class="label">{name}</div>
 
-  <div class="clicker">
+  <button class="clicker" aria-label="switch_toggle" onclick={() => tree.toggle(name)}>
     <svg
       width="1.2rem"
       height="1.2rem"
@@ -23,7 +24,7 @@
         stroke-width="1.6"
       />
     </svg>
-  </div>
+  </button>
 </div>
 
 <style>
@@ -42,8 +43,9 @@
     width: 1.6rem;
     height: 1.6rem;
 
-    background-color: rgb(235, 235, 235);
-    border: 1.5px solid rgb(222, 222, 222);
+    background-color: rgb(246, 246, 246);
+    border: 1.5px solid rgb(235, 235, 235);
+    box-shadow: 4px 4px 5px rgba(0, 0, 0, 0.05);
     color: white;
     display: flex;
     align-items: center;
@@ -73,8 +75,9 @@
     padding-right: 0.2rem;
     padding-top: 0.1rem;
     font-size: 200;
-    background-color: rgb(235, 235, 235);
-    border: 1.5px solid rgb(222, 222, 222);
+    background-color: rgb(246, 246, 246);
+    border: 1.5px solid rgb(235, 235, 235);
     position: relative;
+    box-shadow: 4px 4px 5px rgba(0, 0, 0, 0.05);
   }
 </style>

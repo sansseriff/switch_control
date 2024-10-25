@@ -1,5 +1,5 @@
 import type { SwitchState } from "./types";
-import { reset } from "./api";
+import { reset, flipSwitch } from "./api";
 
 class Tree{
 
@@ -21,6 +21,18 @@ class Tree{
       console.log("new state: ", ss);
       tree.st = ss;
     });
+  }
+
+  toggle(key: string) {
+    // key is "R1", "R2", etc.
+    // convert to idx
+    let idx = parseInt(key.slice(1));
+
+    flipSwitch({ number: idx }).then((ss: SwitchState) => {
+      console.log("new state: ", ss);
+      tree.st = ss;
+    });
+    tree.st[key] = !tree.st[key];
   }
 }
 

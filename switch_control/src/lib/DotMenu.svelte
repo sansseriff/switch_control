@@ -1,18 +1,25 @@
 <script lang="ts">
   import { createDropdownMenu, melt } from "@melt-ui/svelte";
   import GeneralButton from "./GeneralButton.svelte";
+
+
+  interface Props {
+    editChannelLabels: () => void;
+    defaultChannelLabels: () => void;
+  }
+  let { editChannelLabels, defaultChannelLabels }: Props = $props();
+
+
   const {
     elements: { menu, item, trigger, arrow },
-  } = createDropdownMenu();
+  } = createDropdownMenu({positioning: {placement: 'bottom-end'}});
   // You can define any script logic here if needed
-  function handleClick() {
-    // Handle the click event, e.g., open a menu
-    console.log("Menu button clicked");
-  }
+
+  function handleClick() {}
 </script>
 
 <button
-  on:click={handleClick}
+  onclick={handleClick}
   use:melt={$trigger}
   class="menu-button"
   aria-label="dot menu"
@@ -30,8 +37,8 @@
 </button>
 
 <div class="menu" use:melt={$menu}>
-    <div class="item" use:melt={$item} on:m-click={(e) => console.log('Item 1!')}>Option 1</div>
-    <div class="item" use:melt={$item} on:m-click={(e) => console.log('Item 2!')}>Option 2</div>
+    <div class="item" use:melt={$item} role="menuitem" tabindex="0" onclick={editChannelLabels}>Edit Channel Labels</div>
+    <div class="item" use:melt={$item} role="menuitem" tabindex="0" onclick={defaultChannelLabels}>Default Channel Numbers</div>
 </div>
 
 

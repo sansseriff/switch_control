@@ -3,3 +3,5 @@ backend_old/
 backend/backend/dist/
 backend/backend/build/
 backend/backend/__pycache__/
+
+.vscode/

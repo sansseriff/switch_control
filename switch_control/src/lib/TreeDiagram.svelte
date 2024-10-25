@@ -72,6 +72,12 @@
     }
   }
 
+  function handleFigureMouseLeave(event) {
+    if (!event.relatedTarget || (!event.relatedTarget.closest('.pos') && !event.relatedTarget.closest('circle'))) {
+      showOverlay = false;
+    }
+  }
+
   function handleOverlayMouseEnter() {
     showOverlay = true;
   }
@@ -98,11 +104,7 @@
 }
 </style>
 
-<!-- <div class="loc"><TreeSwitchOverlay name="R1"></TreeSwitchOverlay></div> -->
-<!-- {#if showOverlay}
-  <TreeSwitchOverlay style="position: absolute; top: {overlayPosition.top}px; left: {overlayPosition.left}px;" />
-{/if} -->
-<svg viewBox="0 0 681 1094" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 681 1094" fill="none" xmlns="http://www.w3.org/2000/svg" onmouseleave={(e) => handleFigureMouseLeave(e)}>
   
     <g id="Group 36">
     <g id="Group 36_2">
@@ -122,16 +124,6 @@
     <circle id="Ellipse 43" cx="658.5" cy="172.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
     <circle id="Ellipse 44" cx="658.5" cy="22.5" r="22" fill="#D9D9D9" stroke="#EBEBEB"/>
 
-
-    <!-- <circle id="Ellipse 37" cx="658.5" cy="1071.5" r="100" fill="#D9D9D9" stroke="#EBEBEB"/> -->
-    <!-- <circle id="Ellipse 38" cx="658.5" cy="922.5" r="100" fill="#D9D9D9" stroke="#EBEBEB" /> -->
-    <!-- <circle id="Ellipse 39" cx="658.5" cy="772.5" r="100" fill="#D9D9D9" stroke="#EBEBEB"/>
-    <circle id="Ellipse 40" cx="658.5" cy="622.5" r="100" fill="#D9D9D9" stroke="#EBEBEB"/> -->
-    <!-- <circle id="Ellipse 41" cx="658.5" cy="472.5" r="100" fill="#D9D9D9" stroke="#EBEBEB"/>
-    <circle id="Ellipse 42" cx="658.5" cy="322.5" r="100" fill="#D9D9D9" stroke="#EBEBEB"/> -->
-    
-    <!-- <circle id="Ellipse 43" cx="658.5" cy="172.5" r="100" fill="#D9D9D9" stroke="#EBEBEB"/> -->
-    <!-- <circle id="Ellipse 44" cx="658.5" cy="22.5" r="100" fill="#D9D9D9" stroke="#EBEBEB" /> -->
 
     
     </g>

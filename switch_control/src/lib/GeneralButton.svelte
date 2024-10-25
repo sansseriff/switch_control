@@ -7,14 +7,15 @@
     interface Props {
       onclick: (event: MouseEvent) => void;
       children: Snippet;
+      width_rem?: number;
     }
   
-    let { onclick, children }: Props = $props();
+    let { onclick, children, width_rem = 6.5 }: Props = $props();
 
   </script>
   
   
-  <button class="button light" {onclick}>
+  <button class="button light" {onclick} style="width: {width_rem}rem">
     {@render children()}
   </button>
   
@@ -22,7 +23,6 @@
   <style>
   
   .button {
-
     all: unset; 
     display: inline-block; 
     cursor: pointer; 
@@ -39,7 +39,7 @@
     padding-bottom: 0.25rem; 
     height: 1.7rem;
     
-    width: 6.5rem;
+    /* width: 6.5rem; */
     text-align: center;
     font-family:Arial, Helvetica, sans-serif;
   }

@@ -20,14 +20,11 @@
 </script>
 
 
-<!-- <GeneralButtom onclick={() => resetTree()}>Set Labels</GeneralButtom> -->
+
 <main>
-  <!-- <div class="left-bar">
-    <Menu onclick={() => console.log("dsfsd")}></Menu>
-  </div> -->
+
 
   <div class="left">
-    
     <GeneralButton onclick={() => console.log("clicked")}>
       Re-Assert
     </GeneralButton>
@@ -59,18 +56,24 @@
     flex-direction: row;
     padding: 0;
     margin: 0;
-    background-color: rgb(248, 248, 248);
+    
+    margin: 1rem;
   }
 
   .left {
     /* width: 50%; */
+    background-color: white;
+    border-radius: 8px;
     padding-top: 1rem;
     padding-bottom: 1rem;
     display: flex;
     flex-direction: column;
     justify-content: space-around;
     align-items: center;
-    width: 40%;
+    width: 100%;
+    /* margin-left: 2rem; */
+    margin-right: 1rem;
+    border: 1px solid rgb(237, 237, 237);
   }
 
   /* .right {
