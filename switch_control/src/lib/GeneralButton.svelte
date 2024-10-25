@@ -33,8 +33,8 @@
     font-weight: 500; 
     border-radius: 0.25rem; 
 
-    padding-left: 1rem;
-    padding-right: 1rem; 
+    padding-left: 0rem;
+    padding-right: 0rem; 
     padding-top: 0.25rem; 
     padding-bottom: 0.25rem; 
     height: 1.7rem;

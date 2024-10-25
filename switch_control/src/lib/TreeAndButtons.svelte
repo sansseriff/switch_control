@@ -30,9 +30,9 @@
   }
 
   function editChannelLabels() {
-    buttons_state.forEach((button) => {
-      button.proxy_name = "";
-    });
+    // buttons_state.forEach((button) => {
+    //   button.proxy_name = "";
+    // });
     button_mode=false;
   }
 
@@ -41,6 +41,12 @@
     console.log("defaultChannelLabels");
     buttons_state.forEach((button) => {
       button.name = button.default_name;
+    });
+  }
+
+  function clearAll() {
+    buttons_state.forEach((button) => {
+      button.proxy_name = "";
     });
   }
 
@@ -93,16 +99,32 @@
   <div class="button-spacer">
     <DotMenu {editChannelLabels} {defaultChannelLabels}></DotMenu>
     {#if !button_mode}
-    <GeneralButton onclick={finishChannelEdit} width_rem={5}>
-      Finish
-    </GeneralButton>
+
+    <div class="button-group">
+      <GeneralButton onclick={clearAll} width_rem={5}>
+        Clear All
+      </GeneralButton>
+      <GeneralButton onclick={finishChannelEdit} width_rem={5}>
+        Finish
+      </GeneralButton>
+    </div>
+    
     {/if}
   </div>
   
 </div>
 
 <style>
-
+  .button-group {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding-top: 0.0rem;
+    /* padding-left: 0.5rem; */
+    height: 4.28rem;
+    padding-bottom: 0.0rem;
+    /* justify-content: space-between; */
+  }
 
   input {
     all: unset; 
@@ -117,8 +139,8 @@
     font-weight: 500; 
     border-radius: 0.25rem; 
 
-    padding-left: 1rem;
-    padding-right: 1rem; 
+    padding-left: 0.2rem;
+    padding-right: 0.2rem; 
     padding-top: 0.25rem; 
     padding-bottom: 0.25rem; 
     height: 1.7rem;

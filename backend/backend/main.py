@@ -204,11 +204,12 @@ def channel_to_state(channel: int):
 
             idx = int(current_node.relay_index)
             switch.turn_off(0)
-            time.sleep(0.05)
+            
+            time.sleep(0.15)
 
             switch.send_pulse(idx,50)
 
-            time.sleep(0.05)
+            time.sleep(0.15)
 
 
         else:
@@ -218,13 +219,13 @@ def channel_to_state(channel: int):
 
             idx = int(current_node.relay_index)
             switch.turn_on(0)
-            time.sleep(0.05)
+            time.sleep(0.15)
 
             switch.send_pulse(idx, 50)
 
-            time.sleep(0.05)
+            time.sleep(0.15)
             switch.turn_off(0)
-            time.sleep(0.05)
+            time.sleep(0.15)
 
         current_node = current_node.to_next()
 
@@ -302,7 +303,8 @@ def toggle_switch(swp: Sw):
     return tree.tree_state
 
 
-init_tree()
+# don't want to heat things up unnecessarily 
+# init_tree()
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()  # For Windows support
