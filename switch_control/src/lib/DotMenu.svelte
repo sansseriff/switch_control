@@ -99,7 +99,7 @@
 
   .light {
     color: #6b7280; 
-    background-color: #f8fafb;
+    /* background-color: #f8fafb; */
     border: 1.5px solid #dfe2e9; 
   }
 

@@ -14,7 +14,7 @@
 
     // Create a tweened store for the rotation angle
     const tweens = Array.from({ length: 7 }, () => tweened(1, {
-    duration: 300,
+    duration: 200,
     easing: cubicInOut
   }
 ));
@@ -50,6 +50,8 @@
     // const state = buttons_state[3].value; // Assuming idx 3 corresponds to R4_top
     Object.entries(tree_state).forEach(([key, value], index) => {
 
+
+      // console.log("tree state: ", tree_state);
       // console.log("key: ", key);
       // console.log("value: ", value);
       if (index < tweens.length) {
@@ -71,9 +73,12 @@
   //   updateScale(state);
   // });
 
+  // onMount(() => {
+  //   updateScale(tree_state);
+  // });
+
 
   $effect(() => {
-
     updateScale(tree_state);
   })
 

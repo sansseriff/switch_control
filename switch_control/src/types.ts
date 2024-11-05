@@ -16,7 +16,7 @@ export interface SwitchState {
 }
 
 export interface TreeState {
-    [key: string]: SwitchState;
+    [key: string]: SwitchState | number;
     R1: SwitchState;
     R2: SwitchState;
     R3: SwitchState;
@@ -24,4 +24,5 @@ export interface TreeState {
     R5: SwitchState;
     R6: SwitchState;
     R7: SwitchState;
+    activated_channel: number;
   }

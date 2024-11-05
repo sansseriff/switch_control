@@ -90,6 +90,7 @@ class Tree(BaseModel):
     R5: SwitchState
     R6: SwitchState
     R7: SwitchState
+    activated_channel: int
 
 
 tree_state = Tree(
@@ -100,20 +101,23 @@ tree_state = Tree(
     R5=SwitchState(pos=False, color=False),
     R6=SwitchState(pos=False, color=False),
     R7=SwitchState(pos=False, color=False),
+    activated_channel=0,
 )
 
 
 class T(BaseModel):
     tree_state: Tree
+    activated_channel: int
 
 
-tree = T(tree_state=tree_state)
+tree = T(tree_state=tree_state, activated_channel=0)
+
 
 
 class Node:
     def __init__(self, relay_name: str):
-        self.left: Node | None = None
-        self.right: Node | None = None
+        self.left: Node | None | int = None
+        self.right: Node | None | int = None
 
         self.relay_name = relay_name
         self.relay_index = int(relay_name[1])  # R1 -> 1
@@ -131,15 +135,20 @@ class Node:
 
 def flatten_tree(root: Node) -> Tree:
     state = {}
+    state["activated_channel"] = T.activated_channel
     queue = [root]
 
     while queue:
         current_node = queue.pop(0)
         if current_node:
             state[current_node.relay_name] = SwitchState(pos=current_node.polarity, color=current_node.in_use)
-            queue.append(current_node.left)
-            queue.append(current_node.right)
 
+            if isinstance(current_node.left, Node):
+                queue.append(current_node.left)
+            if isinstance(current_node.right, Node):
+                queue.append(current_node.right)
+
+    print("state: ", state) 
     return Tree(**state)
 
 
@@ -162,6 +171,15 @@ R2.left = R4
 R2.right = R5
 R3.left = R6
 R3.right = R7
+
+R4.left = 7
+R4.right = 6
+R5.left = 5
+R5.right = 4
+R6.left = 3
+R6.right = 2
+R7.left = 1
+R7.right = 0
 
 
 def init_tree():
@@ -215,8 +233,16 @@ def update_color():
 
     current_node = R1
     while current_node is not None:
+
+        if type(current_node) is int:
+            T.activated_channel = current_node
+            current_node = None
+            break
+
         current_node.in_use = True
         current_node = current_node.to_next()
+
+    print("current output channel: ", T.activated_channel)
 
 
 def channel_to_state(channel: int):

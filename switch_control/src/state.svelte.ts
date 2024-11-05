@@ -1,5 +1,5 @@
 import type { TreeState, SwitchState } from "./types";
-import { reset, flipSwitch, reAssert } from "./api";
+import { reset, flipSwitch, reAssert, requestChannel } from "./api";
 
 class Tree{
 
@@ -11,20 +11,23 @@ class Tree{
         R5: { pos: false, color: false },
         R6: { pos: false, color: false },
         R7: { pos: false, color: false },
+        activated_channel: 0
       });
+
+    button_colors = $state([false, false, false, false, false, false, false, false]);
 
   constructor() {
   }
 
   resetTree() {
     reset().then((ss: TreeState) => {
-      tree.st = ss;
+      this.st = ss;
     });
   }
 
   reAssertTree() {
     reAssert().then((ss: TreeState) => {
-      tree.st = ss;
+      this.st = ss;
     });
   }
 
@@ -35,9 +38,31 @@ class Tree{
 
     flipSwitch({ number: idx }).then((ss: TreeState) => {
       // console.log("new state: ", ss);
-      tree.st = ss;
+      // console.log("ss actiavted ", ss.activated_channel)
+      this.st = ss;
+      this.updateButtons();
     });
-    tree.st[key].pos = !tree.st[key].pos;
+    // this.st[key].pos = !tree.st[key].pos;
+    // update buttons can't go here because it will be called before the state is updated
+
+  }
+
+  updateButtons() {
+    this.button_colors = this.button_colors.map((color) => false);
+    // console.log(this.st.activated_channel)
+    this.button_colors[this.st.activated_channel] = true;
+    // console.log("after updating: ", this.st.activated_channel)
+    // $state.snapshot(this.button_colors)
+    // console.log(this.button_colors)
+
+  }
+
+  toChannel(idx: number) {
+    requestChannel({ number: idx }).then((ss: TreeState) => {
+      tree.st = ss;
+      // console.log("ss actiavted ", ss.activated_channel)
+      this.updateButtons();
+    });
   }
 }
 
