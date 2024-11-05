@@ -1,5 +1,5 @@
-import type Tree from "./tree.svelte";
-import type { SwitchState } from "./types";
+import type Tree from "./lib/TreeDiagram.svelte";
+import type { TreeState } from "./types";
 
 function fetchWithConfig(url: string, method: string, body?: any): Promise<any> {
     const headers = { 'Content-Type': 'application/json' };
@@ -24,7 +24,7 @@ function fetchWithConfig(url: string, method: string, body?: any): Promise<any> 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            console.log("returning!")
+            // console.log("returning!")
             return response.json();
         });
 }
@@ -42,20 +42,24 @@ interface Switch {
 
 
 
-export function requestChannel(channe_request: Channel): Promise<SwitchState> {
+export function requestChannel(channe_request: Channel): Promise<TreeState> {
     return fetchWithConfig('/channel', 'POST', channe_request);
 }
 
 
-export function flipSwitch(switch_toggle_request: Switch): Promise<SwitchState> {
+export function flipSwitch(switch_toggle_request: Switch): Promise<TreeState> {
     return fetchWithConfig('/switch', 'POST', switch_toggle_request);
 }
 
 
-export function getTreeState(): Promise<SwitchState> {
+export function getTreeState(): Promise<TreeState> {
     return fetchWithConfig('/tree', 'GET');
 }
 
-export function reset(): Promise<SwitchState> {
+export function reset(): Promise<TreeState> {
     return fetchWithConfig('/reset', 'GET');
+}
+
+export function reAssert(): Promise<TreeState> {
+    return fetchWithConfig('/re_assert', 'GET');
 }

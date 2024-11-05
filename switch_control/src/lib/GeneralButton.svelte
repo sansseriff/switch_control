@@ -8,14 +8,15 @@
       onclick: (event: MouseEvent) => void;
       children: Snippet;
       width_rem?: number;
+      highlighted?: boolean;
     }
   
-    let { onclick, children, width_rem = 6.5 }: Props = $props();
+    let { onclick, children, width_rem = 6.5, highlighted=false }: Props = $props();
 
   </script>
   
   
-  <button class="button light" {onclick} style="width: {width_rem}rem">
+  <button class="button light" class:highlighted {onclick} style="width: {width_rem}rem">
     {@render children()}
   </button>
   
@@ -44,6 +45,8 @@
     font-family:Arial, Helvetica, sans-serif;
   }
 
+  
+
   .light {
     color: #6b7280; 
     background-color: #f8fafb;
@@ -53,6 +56,11 @@
   .light:hover {
     color: #181d25; 
     background-color: #f5f6f8; 
+  }
+
+  .highlighted {
+    background-color: rgb(235, 235, 253);
+    border: 1.5px solid #d5d5e2; 
   }
 
   .dark {

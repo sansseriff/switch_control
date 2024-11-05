@@ -40,7 +40,7 @@
     <div use:melt={$item}>Option 1</div>
     <div use:melt={$item}>Option 2</div>
     <div use:melt={$item}>Option 3</div>
-    <div use:melt={$arrow} />
+    <div use:melt={$arrow}></div>
   </div>
 
 

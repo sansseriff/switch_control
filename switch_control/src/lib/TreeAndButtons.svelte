@@ -2,7 +2,7 @@
   import { tree } from "../state.svelte";
   import { requestChannel, flipSwitch, getTreeState, reset } from "../api";
   import { onMount } from "svelte";
-  import type { SwitchState } from "../types";
+  import type { TreeState } from "../types";
   import TreeDiagram from "./TreeDiagram.svelte";
   import type { ButtonState } from "../types";
   import GeneralButton from "./GeneralButton.svelte";
@@ -20,25 +20,31 @@
   ]);
 
   let button_mode = $state(true);
-
+  let button_colors = $state([false, false, false, false, false, false, false, false]);
 
   function toChannel(idx: number) {
-    requestChannel({ number: idx }).then((ss: SwitchState) => {
-      console.log("new state: ", ss);
+    requestChannel({ number: idx }).then((ss: TreeState) => {
+      // console.log("new state: ", ss);
+
+      button_colors.forEach((color, i) => {
+        // console.log("i: ", i);
+        // console.log("idx: ", idx);
+        button_colors[i] = i === idx;
+        // console.log("color: ", button_colors[i]);
+      });
+
+      // console.log("button colors: ", button_colors);
+
       tree.st = ss;
     });
   }
 
   function editChannelLabels() {
-    // buttons_state.forEach((button) => {
-    //   button.proxy_name = "";
-    // });
     button_mode=false;
   }
 
   function defaultChannelLabels() {
     button_mode = true;
-    console.log("defaultChannelLabels");
     buttons_state.forEach((button) => {
       button.name = button.default_name;
     });
@@ -70,29 +76,27 @@
   }
 
   onMount(() => {
-    getTreeState().then((ss: SwitchState) => {
-      // console.log("new state in onmount: ", ss);
+    getTreeState().then((ss: TreeState) => {
       tree.st = ss;
     });
   });
 </script>
 
 <div class="container">
-  <div class="tree"><TreeDiagram switch_state={tree.st} /></div>
+  <div class="tree"><TreeDiagram tree_state={tree.st} /></div>
   <div class="buttons">
-    {#each buttons_state as button}
+    {#each buttons_state as button, idx}
       <div class="spacer">
 
         <!-- if button_mode -->
         {#if button_mode}
-          <GeneralButton onclick={() => toChannel(button.idx)} width_rem={5}>
+          <GeneralButton onclick={() => toChannel(button.idx)} width_rem={5} highlighted={button_colors[idx]}>
             {button.name}
           </GeneralButton>
         {:else}
           <input class="light" type="text" id="name" name="name" size="10" placeholder={button.default_name} bind:value={button.proxy_name}/>
         {/if}
 
-        <!-- <input type="text" id="name" name="name" size="10" /> -->
       </div>
     {/each}
   </div>

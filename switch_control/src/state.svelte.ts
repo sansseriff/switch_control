@@ -1,24 +1,29 @@
-import type { SwitchState } from "./types";
-import { reset, flipSwitch } from "./api";
+import type { TreeState, SwitchState } from "./types";
+import { reset, flipSwitch, reAssert } from "./api";
 
 class Tree{
 
-   st: SwitchState = $state({
-        R1: false,
-        R2: false,
-        R3: false,
-        R4: false,
-        R5: false,
-        R6: false,
-        R7: false,
+   st: TreeState = $state({
+        R1: { pos: false, color: false },
+        R2: { pos: false, color: false },
+        R3: { pos: false, color: false },
+        R4: { pos: false, color: false },
+        R5: { pos: false, color: false },
+        R6: { pos: false, color: false },
+        R7: { pos: false, color: false },
       });
 
   constructor() {
   }
 
   resetTree() {
-    reset().then((ss: SwitchState) => {
-      console.log("new state: ", ss);
+    reset().then((ss: TreeState) => {
+      tree.st = ss;
+    });
+  }
+
+  reAssertTree() {
+    reAssert().then((ss: TreeState) => {
       tree.st = ss;
     });
   }
@@ -28,11 +33,11 @@ class Tree{
     // convert to idx
     let idx = parseInt(key.slice(1));
 
-    flipSwitch({ number: idx }).then((ss: SwitchState) => {
-      console.log("new state: ", ss);
+    flipSwitch({ number: idx }).then((ss: TreeState) => {
+      // console.log("new state: ", ss);
       tree.st = ss;
     });
-    tree.st[key] = !tree.st[key];
+    tree.st[key].pos = !tree.st[key].pos;
   }
 }
 

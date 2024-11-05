@@ -8,13 +8,13 @@
   import TreeDiagram from "./lib/TreeDiagram.svelte";
   
 
-  import type { ButtonState, SwitchState } from "./types";
+  import type { ButtonState, TreeState } from "./types";
   import { onMount } from "svelte";
   import Menu from "./lib/Menu.svelte";
 
   import { tree } from "./state.svelte";
   import TreeAndButtons from "./lib/TreeAndButtons.svelte";
-
+  import { reAssert } from "./api";
   
 
 </script>
@@ -25,7 +25,7 @@
 
 
   <div class="left">
-    <GeneralButton onclick={() => console.log("clicked")}>
+    <GeneralButton onclick={() => tree.reAssertTree()}>
       Re-Assert
     </GeneralButton>
 
@@ -76,12 +76,6 @@
     border: 1px solid rgb(237, 237, 237);
   }
 
-  /* .right {
-    display: flex;
-    flex-direction: row;
-    justify-content: left;
-    padding-top: 0.1rem;
-  } */
 
   
 </style>
