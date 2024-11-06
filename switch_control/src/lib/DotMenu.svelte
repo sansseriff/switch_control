@@ -23,7 +23,7 @@
 >
   <svg
     height="0.9rem"
-    width= "0.9rem"
+    width="0.9rem"
     viewBox="0 0 15 48"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
@@ -35,6 +35,7 @@
 </button>
 
 <div class="menu" use:melt={$menu}>
+  <div class="arrow" use:melt={$arrow}></div>
   <div
     class="item"
     use:melt={$item}
@@ -60,11 +61,21 @@
     box-sizing: border-box;
     background-color: white;
     border-radius: 4px;
-    border: 1.5px solid #dfe2e9; 
+    border: 1.5px solid #dfe2e9;
+    position: relative; /* Ensure the menu is positioned */
+    z-index: 1; /* Set a base z-index for the menu */
   }
 
-  
-
+  .arrow {
+    box-sizing: content-box;
+    border-left: 1.5px solid #dfe2e9;
+    border-top: 1.5px solid #dfe2e9;
+    position: absolute;
+    transform: translateY(-1.5px) translateX(1.5px) rotate(45deg) !important;
+    z-index: 2;
+    padding-left: 0.08rem;
+    padding-top: 0.08rem;
+  }
 
   .item {
     font-family: Arial, Helvetica, sans-serif;
@@ -72,6 +83,8 @@
     border-radius: 5px;
     margin: 0.1rem;
     padding: 0.5rem;
+    position: relative; /* Ensure the items are positioned */
+    z-index: 3; /* Ensure the items are above the arrow */
   }
 
   .item:hover {
@@ -93,19 +106,17 @@
     width: 1.7rem;
     height: 1.7rem;
     border-radius: 10%;
-    padding-top: 0.24rem;
-    padding-left: 0.45rem;
   }
 
   .light {
-    color: #6b7280; 
+    color: #6b7280;
     /* background-color: #f8fafb; */
-    border: 1.5px solid #dfe2e9; 
+    border: 1.5px solid #dfe2e9;
   }
 
   .light:hover {
-    color: #181d25; 
-    background-color: #f5f6f8; 
+    color: #181d25;
+    background-color: #f5f6f8;
   }
 
   .menu-button svg {
@@ -119,5 +130,4 @@
   /* svg: {
     padding-top: 0.1rem;
   } */
-
 </style>

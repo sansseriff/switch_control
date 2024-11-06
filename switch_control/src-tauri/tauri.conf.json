@@ -45,10 +45,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 600,
-        "resizable": true,
+        "height": 410,
+        "resizable": false,
         "title": "Switch Control",
-        "width": 550
+        "width": 750
       }
     ],
     "security": {

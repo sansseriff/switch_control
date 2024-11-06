@@ -6,7 +6,6 @@
   import GeneralButton from "./lib/GeneralButton.svelte";
 
   import TreeDiagram from "./lib/TreeDiagram.svelte";
-  
 
   import type { ButtonState, TreeState } from "./types";
   import { onMount } from "svelte";
@@ -15,48 +14,31 @@
   import { tree } from "./state.svelte";
   import TreeAndButtons from "./lib/TreeAndButtons.svelte";
   import { reAssert } from "./api";
-  
-
 </script>
 
-
-
 <main>
-
-
   <div class="left">
-    <GeneralButton onclick={() => tree.reAssertTree()}>
-      Re-Assert
-    </GeneralButton>
+    <GeneralButton
+      onclick={() => tree.reAssertTree()}
+      info="Re-send pulses for current configuration">Re-Assert</GeneralButton
+    >
 
-    <GeneralButton onclick={() => tree.resetTree()}>Reset</GeneralButton>
+    <GeneralButton
+      info="Reset all switches to default position"
+      onclick={() => tree.resetTree()}>Reset</GeneralButton
+    >
   </div>
 
   <TreeAndButtons></TreeAndButtons>
 </main>
 
 <style>
-
-  .left-bar {
-    display: flex;
-    flex-direction: column;
-    /* justify-content: center; */
-    align-items: center;
-    padding-top: 0.5rem;
-    padding: 0.5rem;
-    padding-bottom: 1rem;
-    background-color: rgb(228, 228, 228);
-  }
-  
-
-  
-
   main {
     display: flex;
     flex-direction: row;
     padding: 0;
     margin: 0;
-    
+
     margin: 1rem;
   }
 
@@ -75,7 +57,4 @@
     margin-right: 1rem;
     border: 1px solid rgb(237, 237, 237);
   }
-
-
-  
 </style>

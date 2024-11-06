@@ -27,7 +27,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-PULSE_TIME = 15
+PULSE_TIME = 40
 SLEEP_TIME = 0.005
 REMEMBER_STATE: bool = True
 
@@ -113,7 +113,6 @@ class T(BaseModel):
 tree = T(tree_state=tree_state, activated_channel=0)
 
 
-
 class Node:
     def __init__(self, relay_name: str):
         self.left: Node | None | int = None
@@ -141,14 +140,16 @@ def flatten_tree(root: Node) -> Tree:
     while queue:
         current_node = queue.pop(0)
         if current_node:
-            state[current_node.relay_name] = SwitchState(pos=current_node.polarity, color=current_node.in_use)
+            state[current_node.relay_name] = SwitchState(
+                pos=current_node.polarity, color=current_node.in_use
+            )
 
             if isinstance(current_node.left, Node):
                 queue.append(current_node.left)
             if isinstance(current_node.right, Node):
                 queue.append(current_node.right)
 
-    print("state: ", state) 
+    print("state: ", state)
     return Tree(**state)
 
 
@@ -194,7 +195,6 @@ def init_tree():
 
     switch.turn_off(0)
 
-    
     update_color()
     tree.tree_state = flatten_tree(R1)
 
@@ -220,9 +220,11 @@ def re_assert_tree():
         time.sleep(SLEEP_TIME)
         current_node = current_node.to_next()
 
+        if type(current_node) is int:
+            break
+
     update_color()
     tree.tree_state = flatten_tree(R1)
-
 
     return tree.tree_state
 
@@ -305,13 +307,10 @@ def channel_to_state(channel: int):
 
         current_node = current_node.to_next()
 
-    
-
     # print("BEFORE: ", "R1:", tree.tree_state.R1.color, "  R2:", tree.tree_state.R2.color, "  R3: ", tree.tree_state.R3.color, "  R4:", tree.tree_state.R4.color, "  R5:", tree.tree_state.R5.color, "  R6:", tree.tree_state.R6.color, "  R7:", tree.tree_state.R7.color)
     update_color()
     # print("After: ", "R1:", tree.tree_state.R1.color, "  R2:", tree.tree_state.R2.color, "  R3: ", tree.tree_state.R3.color, "  R4:", tree.tree_state.R4.color, "  R5:", tree.tree_state.R5.color, "  R6:", tree.tree_state.R6.color, "  R7:", tree.tree_state.R7.color)
     tree.tree_state = flatten_tree(R1)
-
 
     return tree.tree_state
 
