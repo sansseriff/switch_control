@@ -20,12 +20,9 @@
   ]);
 
   let button_mode = $state(true);
-  
-
-  
 
   function editChannelLabels() {
-    button_mode=false;
+    button_mode = false;
   }
 
   function defaultChannelLabels() {
@@ -73,35 +70,42 @@
   <div class="buttons">
     {#each buttons_state as button, idx}
       <div class="spacer">
-
         <!-- if button_mode -->
         {#if button_mode}
-          <GeneralButton onclick={() => tree.toChannel(button.idx)} width_rem={5} highlighted={tree.button_colors[idx]}>
+          <GeneralButton
+            onclick={() => tree.toChannel(button.idx)}
+            width_rem={5}
+            highlighted={tree.button_colors[idx]}
+          >
             {button.name}
           </GeneralButton>
         {:else}
-          <input class="light" type="text" id="name" name="name" size="10" placeholder={button.default_name} bind:value={button.proxy_name}/>
+          <input
+            class="light"
+            type="text"
+            id="name"
+            name="name"
+            size="10"
+            placeholder={button.default_name}
+            bind:value={button.proxy_name}
+          />
         {/if}
-
       </div>
     {/each}
   </div>
   <div class="button-spacer">
     <DotMenu {editChannelLabels} {defaultChannelLabels}></DotMenu>
     {#if !button_mode}
-
-    <div class="button-group">
-      <GeneralButton onclick={clearAll} width_rem={5}>
-        Clear All
-      </GeneralButton>
-      <GeneralButton onclick={finishChannelEdit} width_rem={5}>
-        Finish
-      </GeneralButton>
-    </div>
-    
+      <div class="button-group">
+        <GeneralButton onclick={clearAll} width_rem={5}>
+          Clear All
+        </GeneralButton>
+        <GeneralButton onclick={finishChannelEdit} width_rem={5}>
+          Finish
+        </GeneralButton>
+      </div>
     {/if}
   </div>
-  
 </div>
 
 <style>
@@ -109,45 +113,45 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding-top: 0.0rem;
+    padding-top: 0rem;
     /* padding-left: 0.5rem; */
     height: 4.28rem;
-    padding-bottom: 0.0rem;
+    padding-bottom: 0rem;
     /* justify-content: space-between; */
   }
 
   input {
-    all: unset; 
+    all: unset;
     cursor: text;
     text-align: left;
-    display: inline-block; 
+    display: inline-block;
     cursor: text;
-    appearance: none; 
-    
+    appearance: none;
+
     box-sizing: border-box;
-    font-size: 0.875rem; 
-    font-weight: 500; 
-    border-radius: 0.25rem; 
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 0.25rem;
 
     padding-left: 0.2rem;
-    padding-right: 0.2rem; 
-    padding-top: 0.25rem; 
-    padding-bottom: 0.25rem; 
+    padding-right: 0.2rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
     height: 1.7rem;
-    
+
     width: 5rem;
-    font-family:Arial, Helvetica, sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
   }
 
   .light {
-    color: #6b7280; 
+    color: #6b7280;
     /* background-color: #f8fafb; */
-    border: 1.5px solid #dfe2e9; 
+    border: 1.5px solid #dfe2e9;
   }
 
   .light:hover {
-    color: #181d25; 
-    background-color: #f5f6f8; 
+    color: #181d25;
+    background-color: #f5f6f8;
   }
 
   .light::placeholder {
@@ -161,10 +165,7 @@
     justify-content: space-between;
     min-width: 7rem;
   }
-  .spacer {
-    /* padding-top: 0.44rem; */
-    /* padding-bottom: 0.88rem; */
-  }
+
   .container {
     display: flex;
     flex-direction: row;
@@ -181,36 +182,15 @@
   .buttons {
     display: flex;
     flex-direction: column;
-    justify-content:space-between;
-    padding-top: 0.0rem;
+    justify-content: space-between;
+    padding-top: 0rem;
     padding-left: 0.5rem;
-    padding-bottom: 0.0rem;
+    padding-bottom: 0rem;
     /* justify-content: space-between; */
-  }
-
-  .switches {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding-top: 0.1rem;
-    padding-left: 0.5rem;
-  }
-
-  .row_spacer {
-    padding-left: 1rem;
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
   }
 
   .tree {
     padding-top: 0.45rem;
     padding-bottom: 0.3rem;
-  }
-
-  .id {
-    width: 2rem;
-    text-align: center;
-    font-family: Arial, Helvetica, sans-serif;
   }
 </style>
