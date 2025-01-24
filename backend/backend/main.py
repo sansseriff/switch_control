@@ -3,29 +3,34 @@ import subprocess
 from fastapi import FastAPI, Request
 from uvicorn import run
 import multiprocessing
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+
+# from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from backend.numatoRelay import Relay
+from numatoRelay import Relay
 import time
+import webview
+import tempfile
+
+from location import THISS
+
+
+print("THISS: ", THISS)
+from location import WEB_DIR
+import mimetypes
+from uvicorn import Config, Server
+
 
 app = FastAPI()
 
-origins = [
-    "http://localhost:5173",
-    "http://localhost:4173",
-    "tauri://localhost",  # this fixed it! With this line, the Tauri app can now access the FastAPI server
-]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+mimetypes.init()
 
 PULSE_TIME = 40
 SLEEP_TIME = 0.005
@@ -34,6 +39,40 @@ REMEMBER_STATE: bool = True
 
 # https://numato.com/docs/8-channel-usb-relay-module/
 # OSX: ls /dev/*usb*
+
+
+def start_window(pipe_send, url_to_load):
+    def on_closed():
+        pipe_send.send("closed")
+
+    win = webview.create_window(
+        "Switch Control", url=url_to_load, resizable=True, width=800, height=412
+    )
+    win.events.closed += on_closed
+    webview.start(storage_path=tempfile.mkdtemp())
+
+
+class UvicornServer(multiprocessing.Process):
+    def __init__(self, config: Config):
+        super().__init__()
+        self.server = Server(config=config)
+        self.config = config
+
+    def stop(self):
+        self.terminate()
+
+    def run(self, *args, **kwargs):
+        self.server.run()
+
+
+app.mount("/assets", StaticFiles(directory=Path(WEB_DIR, "assets")), name="")
+
+
+# return the index.html file on browser
+@app.get("/", response_class=HTMLResponse)
+async def return_index(request: Request):
+    mimetypes.add_type("application/javascript", ".js")
+    return FileResponse(Path(WEB_DIR, "index.html"))
 
 
 # Scan the system for serial ports
@@ -50,9 +89,6 @@ def get_serial_ports():
             continue
 
     return ports
-
-
-# switch = Relay('/dev/tty.usbmodem1301')
 
 
 # Initialize the switch with one of the detected serial ports
@@ -184,7 +220,6 @@ R7.right = 0
 
 
 def init_tree():
-
     switch.turn_on(0)
 
     for node in nodes:
@@ -235,7 +270,6 @@ def update_color():
 
     current_node = R1
     while current_node is not None:
-
         if type(current_node) is int:
             T.activated_channel = current_node
             current_node = None
@@ -323,7 +357,6 @@ async def validation_exception_handler(request, exc):
 
 @app.exception_handler(400)
 async def bad_request_handler(request: Request, exc):
-
     print("detail: ", exc)
     return JSONResponse(
         status_code=400,
@@ -356,7 +389,6 @@ def get_tree():
 
 @app.post("/switch")
 def toggle_switch(swp: Sw):
-
     sw = nodes[swp.number - 1]
     print("the switch to toggle: ", sw.relay_name)
 
@@ -388,7 +420,31 @@ def toggle_switch(swp: Sw):
 # don't want to heat things up unnecessarily
 # init_tree()
 
-if __name__ == "__main__":
-    multiprocessing.freeze_support()  # For Windows support
+# if __name__ == "__main__":
+#     multiprocessing.freeze_support()  # For Windows support
 
-    run(app, host="0.0.0.0", port=9050, reload=False, workers=1)
+#     run(app, host="0.0.0.0", port=9050, reload=False, workers=1)
+
+
+if __name__ == "__main__":
+    server_ip = "127.0.0.1"
+    server_port = 8000
+    conn_recv, conn_send = multiprocessing.Pipe()
+
+    windowsp = multiprocessing.Process(
+        target=start_window, args=(conn_send, f"http://{server_ip}:{server_port}/")
+    )
+    windowsp.start()
+
+    config = Config("main:app", host=server_ip, port=server_port, log_level="debug")
+    instance = UvicornServer(config=config)
+    instance.start()
+
+    window_status = ""
+    while "closed" not in window_status:
+        # get a unit of work
+        window_status = conn_recv.recv()
+        # report
+        print(f"got {window_status}", flush=True)
+
+    instance.stop()
