@@ -29,7 +29,8 @@ if (process.platform === "win32") {
     execSync(`rmdir /S /Q ${output_directory}`, { stdio: 'inherit' });
     execSync(`mkdir ${output_directory}`, { stdio: 'inherit' });
 } else {
-    await $`rm -rf ${path.join(output_directory, "/*")}`;
+    await $`rm -rf ${path.join(output_directory)}`;
+    await $`mkdir -p ${output_directory}`;
 }
 // process.exit(1);
 

@@ -9,6 +9,7 @@
     children: Snippet;
     width_rem?: number;
     highlighted?: boolean;
+    danger?: boolean;
     info?: string;
   }
 
@@ -17,6 +18,7 @@
     children,
     width_rem = 6.5,
     highlighted = false,
+    danger = false,
     info = "",
   }: Props = $props();
 
@@ -48,6 +50,7 @@
   class="button light"
   use:melt={$trigger}
   class:highlighted
+  class:danger
   {onclick}
   style="width: {width_rem}rem"
 >
@@ -91,6 +94,7 @@
   }
 
   .button {
+    cursor: pointer;
     all: unset;
     display: inline-block;
     cursor: pointer;
@@ -119,7 +123,7 @@
   }
 
   .light:hover {
-    color: #181d25;
+    /* color: #181d25; */
     background-color: #f5f6f8;
   }
 
@@ -127,6 +131,19 @@
     /* background-color: #eef1f7; */
     border: 2.3px solid #534deb;
     color: #534deb;
+  }
+
+  .danger {
+    border: 2.3px solid #f87171;
+    color: #f87171;
+  }
+
+  .danger:hover {
+    background-color: #ffeded;
+  }
+
+  .highlighted:hover {
+    background-color: #efeeff;
   }
 
   .dark {

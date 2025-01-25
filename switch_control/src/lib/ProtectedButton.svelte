@@ -54,6 +54,7 @@
   });
 
   function handleVerifiedClick() {
+    open.set(false);
     const verification = {
       verified: true,
       timestamp: Date.now(),
@@ -62,6 +63,8 @@
     onVerifiedClick(verification);
   }
 
+  // dialog
+  // https://www.melt-ui.com/docs/builders/dialog
   const {
     elements: {
       trigger,
@@ -119,11 +122,9 @@
 
       <div class="actions">
         <GeneralButton onclick={() => open.set(false)}>Cancel</GeneralButton>
-        <GeneralButton highlighted={true} onclick={handleVerifiedClick}
+        <GeneralButton danger={true} onclick={handleVerifiedClick}
           >Trigger</GeneralButton
         >
-        <!-- <button use:melt={$close} class="secondary"> Cancel </button>
-        <button use:melt={$close} class="primary"> Continue </button> -->
       </div>
 
       <button use:melt={$close} aria-label="Close" class="close">
@@ -139,7 +140,7 @@
     inset: 0;
     z-index: 50;
 
-    background-color: rgba(0, 0, 0, 0.355);
+    background-color: rgba(255, 255, 255, 0.6);
   }
 
   .content {
@@ -164,6 +165,8 @@
     box-shadow:
       0 10px 15px -3px rgb(0, 0, 0, 0.1),
       0 4px 6px -4px rgb(0, 0, 0, 0.05);
+
+    border: 1.5px solid #dfe2e9;
   }
 
   .title {
@@ -208,19 +211,9 @@
     line-height: 1;
   }
 
-  /* .actions button.secondary {
-    background-color: rgb(var(--color-zinc-100) / 1);
-
-    color: rgb(var(--color-zinc-600) / 1);
-  }
-
-  .actions button.primary {
-    background-color: rgb(var(--color-magnum-100) / 1);
-
-    color: rgb(var(--color-magnum-900) / 1);
-  } */
-
   .close {
+    /* no button styling by default */
+    all: unset;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -235,12 +228,12 @@
     width: 1.5rem;
 
     border-radius: 9999px;
-
-    color: gray;
+    cursor: pointer;
+    color: rgb(0, 0, 0);
   }
 
   .close:hover {
-    background-color: lightblue;
+    background-color: #ededff;
   }
 
   .close:focus {
