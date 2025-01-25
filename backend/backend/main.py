@@ -20,10 +20,10 @@ import tempfile
 
 from verification import Verification
 
-from location import THISS
+# from location import THISS
 
 
-print("THISS: ", THISS)
+# print("THISS: ", THISS)
 from location import WEB_DIR
 import mimetypes
 from uvicorn import Config, Server
@@ -362,7 +362,6 @@ def channel_to_state(channel: int):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    print("the request: ", request)
     return PlainTextResponse(str(exc), status_code=400)
 
 

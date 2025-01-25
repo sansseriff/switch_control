@@ -40,3 +40,12 @@ button,
 :-moz-ui-invalid {
   box-shadow: none;
 }
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+:disabled {
+  cursor: default;
+}
