@@ -7,6 +7,7 @@
   import type { ButtonState } from "../types";
   import GeneralButton from "./GeneralButton.svelte";
   import DotMenu from "./DotMenu.svelte";
+  import ProtectedButton from "./ProtectedButton.svelte";
 
   let buttons_state: ButtonState[] = $state([
     { name: "Ch 1", proxy_name: "", default_name: "Ch 1", idx: 0, value: true },
@@ -72,13 +73,14 @@
       <div class="spacer">
         <!-- if button_mode -->
         {#if button_mode}
-          <GeneralButton
-            onclick={() => tree.toChannel(button.idx)}
+          <ProtectedButton
+            onVerifiedClick={(verification) =>
+              tree.toChannel(button.idx, verification)}
             width_rem={5}
             highlighted={tree.button_colors[idx]}
           >
             {button.name}
-          </GeneralButton>
+          </ProtectedButton>
         {:else}
           <input
             class="light"

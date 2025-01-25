@@ -1,20 +1,21 @@
 import type { TreeState, SwitchState } from "./types";
 import { reset, flipSwitch, reAssert, requestChannel } from "./api";
+import type { Verification } from "./types";
 
-class Tree{
+class Tree {
 
-   st: TreeState = $state({
-        R1: { pos: false, color: false },
-        R2: { pos: false, color: false },
-        R3: { pos: false, color: false },
-        R4: { pos: false, color: false },
-        R5: { pos: false, color: false },
-        R6: { pos: false, color: false },
-        R7: { pos: false, color: false },
-        activated_channel: 0
-      });
+  st: TreeState = $state({
+    R1: { pos: false, color: false },
+    R2: { pos: false, color: false },
+    R3: { pos: false, color: false },
+    R4: { pos: false, color: false },
+    R5: { pos: false, color: false },
+    R6: { pos: false, color: false },
+    R7: { pos: false, color: false },
+    activated_channel: 0
+  });
 
-    button_colors = $state([false, false, false, false, false, false, false, false]);
+  button_colors = $state([false, false, false, false, false, false, false, false]);
 
   constructor() {
   }
@@ -57,10 +58,12 @@ class Tree{
 
   }
 
-  toChannel(idx: number) {
-    requestChannel({ number: idx }).then((ss: TreeState) => {
-      tree.st = ss;
-      // console.log("ss actiavted ", ss.activated_channel)
+  toChannel(idx: number, verification: Verification) {
+    requestChannel({
+      number: idx,
+      verification: verification
+    }).then((ss: TreeState) => {
+      this.st = ss;
       this.updateButtons();
     });
   }

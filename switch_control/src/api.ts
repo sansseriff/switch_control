@@ -1,5 +1,6 @@
 import type Tree from "./lib/TreeDiagram.svelte";
 import type { TreeState } from "./types";
+import type { Verification } from "./types";
 
 function fetchWithConfig(url: string, method: string, body?: any): Promise<any> {
     const headers = { 'Content-Type': 'application/json' };
@@ -30,24 +31,26 @@ function fetchWithConfig(url: string, method: string, body?: any): Promise<any> 
 }
 
 
-interface Channel {
+interface ChannelRequest {
     number: number;
+    verification: Verification;
 }
 
-interface Switch {
+interface SwitchRequest {
     number: number;
+    verification: Verification;
 }
 
 
 
 
 
-export function requestChannel(channe_request: Channel): Promise<TreeState> {
-    return fetchWithConfig('/channel', 'POST', channe_request);
+export function requestChannel(channel_request: ChannelRequest): Promise<TreeState> {
+    return fetchWithConfig('/channel', 'POST', channel_request);
 }
 
 
-export function flipSwitch(switch_toggle_request: Switch): Promise<TreeState> {
+export function flipSwitch(switch_toggle_request: SwitchRequest): Promise<TreeState> {
     return fetchWithConfig('/switch', 'POST', switch_toggle_request);
 }
 
