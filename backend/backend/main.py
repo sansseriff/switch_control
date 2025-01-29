@@ -36,7 +36,7 @@ mimetypes.init()
 
 PULSE_TIME = 40
 SLEEP_TIME = 0.005
-REMEMBER_STATE: bool = True
+REMEMBER_STATE: bool = False
 
 
 # https://numato.com/docs/8-channel-usb-relay-module/
