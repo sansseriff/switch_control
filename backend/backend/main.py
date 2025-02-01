@@ -181,8 +181,8 @@ def get_state_manager():
 
 mimetypes.init()
 
-PULSE_TIME = 40
-SLEEP_TIME = 0.005
+PULSE_TIME = 50
+SLEEP_TIME = 0.050
 REMEMBER_STATE: bool = False
 
 
@@ -476,7 +476,10 @@ if __name__ == "__main__":
     conn_recv, conn_send = multiprocessing.Pipe()
 
     # Start server first
-    config = Config("main:app", host=server_ip, port=server_port, log_level="debug")
+    # user 1 worker for easier data sharing
+    config = Config(
+        "main:app", host=server_ip, port=server_port, log_level="debug", workers=1
+    )
     instance = UvicornServer(config=config)
     instance.start()
 
