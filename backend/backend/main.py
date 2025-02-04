@@ -251,9 +251,7 @@ def flatten_tree(root: MaybeNode) -> Tree:
     return Tree(**state)
 
 
-def init_tree(
-    verification: Verification, state: StateManager = Depends(get_state_manager)
-):
+def init_tree(verification: Verification):
     app.state.v.switch.turn_on(0, verification)
 
     for node in app.state.v.nodes:
@@ -264,15 +262,13 @@ def init_tree(
 
     app.state.v.switch.turn_off(0, verification)
 
-    update_color(state)
+    update_color()
     app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
 
     return app.state.v.tree.tree_state
 
 
-def re_assert_tree(
-    verification: Verification, state: StateManager = Depends(get_state_manager)
-):
+def re_assert_tree(verification: Verification):
     current_node = app.state.v.top_node
 
     while type(current_node) is Node:
@@ -294,13 +290,13 @@ def re_assert_tree(
         if type(current_node) is int:
             break
 
-    update_color(state)
+    update_color()
     app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
 
     return app.state.v.tree.tree_state
 
 
-def update_color(state: StateManager):
+def update_color():
     for node in app.state.v.nodes:
         node.in_use = False
 
@@ -321,7 +317,6 @@ def update_color(state: StateManager):
 def channel_to_state(
     channel: int,
     verification: Verification,
-    state: StateManager = Depends(get_state_manager),
 ):
     """
     take in user-numbering channel (1-8)
@@ -383,7 +378,7 @@ def channel_to_state(
         current_node = current_node.to_next()
 
     # print("BEFORE: ", "R1:", tree.tree_app.state.v.R1.color, "  R2:", tree.tree_app.state.v.R2.color, "  R3: ", tree.tree_app.state.v.R3.color, "  R4:", tree.tree_app.state.v.R4.color, "  R5:", tree.tree_app.state.v.R5.color, "  R6:", tree.tree_app.state.v.R6.color, "  R7:", tree.tree_app.state.v.R7.color)
-    update_color(state)
+    update_color()
     # print("After: ", "R1:", tree.tree_app.state.v.R1.color, "  R2:", tree.tree_app.state.v.R2.color, "  R3: ", tree.tree_app.state.v.R3.color, "  R4:", tree.tree_app.state.v.R4.color, "  R5:", tree.tree_app.state.v.R5.color, "  R6:", tree.tree_app.state.v.R6.color, "  R7:", tree.tree_app.state.v.R7.color)
     app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
 
@@ -422,7 +417,7 @@ def request_channel(channel: Channel):
 
 
 @app.get("/tree")
-def get_tree(state: StateManager = Depends(get_state_manager)):
+def get_tree():
     # print("tree state: ", tree_state)
     return app.state.v.tree.tree_state
 
@@ -431,7 +426,6 @@ def get_tree(state: StateManager = Depends(get_state_manager)):
 def toggle_switch(
     swp: Sw,
     verification: Verification,
-    state: StateManager = Depends(get_state_manager),
 ):
     sw = app.state.v.nodes[swp.number - 1]
     print("the switch to toggle: ", sw.relay_name)
@@ -456,7 +450,7 @@ def toggle_switch(
         time.sleep(SLEEP_TIME)
         app.state.v.switch.turn_off(0, verification)
 
-    update_color(state)
+    update_color()
     app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
     return app.state.v.tree.tree_state
 
