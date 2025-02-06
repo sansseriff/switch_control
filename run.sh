@@ -1,1 +1,1 @@
-uv run ./backend/backend/main.py
+cd /backend/backend && uv run main.py
