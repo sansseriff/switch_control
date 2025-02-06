@@ -10,7 +10,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 cd backend
 
 # Create a local virtual environment using Python 3.12
-uv venv --python 3.12
+uv venv --python 3.13
 
 # Activate the virtual environment
 source .venv/bin/activate
