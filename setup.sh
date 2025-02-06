@@ -18,3 +18,12 @@ source .venv/bin/activate
 
 # Install dependencies from pyproject.toml
 uv sync
+
+# Print colored instructions
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+echo -e "${GREEN}Setup complete! You can now:${NC}"
+echo -e "${GREEN}1. Run the script with: sh run.sh${NC}"
+echo -e "${GREEN}2. Run directly with UV: cd backend && uv run main.py${NC}"
+
+
