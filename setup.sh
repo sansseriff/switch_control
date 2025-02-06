@@ -17,4 +17,4 @@ source .venv/bin/activate
 
 
 # Install dependencies from pyproject.toml
-uv pip sync
+uv sync
