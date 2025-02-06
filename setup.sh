@@ -15,5 +15,6 @@ uv venv --python 3.12
 # Activate the virtual environment
 source .venv/bin/activate
 
+
 # Install dependencies from pyproject.toml
 uv pip sync
