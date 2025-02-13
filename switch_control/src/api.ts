@@ -66,3 +66,10 @@ export function reset(): Promise<TreeState> {
 export function reAssert(): Promise<TreeState> {
     return fetchWithConfig('/re_assert', 'GET');
 }
+
+export async function initialize(): Promise<void> {
+    const response = await fetchWithConfig('/initialize', 'GET');
+    if (!response.ok) {
+        throw new Error('Failed to initialize');
+    }
+}

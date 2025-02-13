@@ -1,6 +1,7 @@
 import subprocess
 
 from fastapi import FastAPI, Request
+import asyncio
 
 # from uvicorn import run
 import multiprocessing
@@ -22,6 +23,11 @@ import tempfile
 from verification import Verification
 from multiprocessing.connection import Connection
 from starlette.datastructures import State
+from fastapi import HTTPException
+from multiprocessing import Manager
+
+# import SyncManager type
+from multiprocessing.managers import SyncManager
 
 # from location import THISS
 
@@ -85,6 +91,14 @@ class Node:
 MaybeNode = Node | int | None
 
 
+
+# Create a Manager instance
+manager = Manager()
+
+# Create a shared dictionary
+shared_state = manager.dict()
+
+
 # Scan the system for serial ports
 def get_serial_ports():
     ports: list[str | None] = []
@@ -97,6 +111,9 @@ def get_serial_ports():
         except subprocess.CalledProcessError:
             # Ignore the error if no devices are found for the current pattern
             continue
+
+
+    print("these are the ports: ", ports)
 
     return ports
 
@@ -152,16 +169,20 @@ class StateManager:
     def initialize_relay(self):
         serial_ports = get_serial_ports()
         if serial_ports:
-            try:
-                switch = Relay(serial_ports[0])
-                print("Relay initialized successfully")
-            except Exception as e:
-                print(f"Failed to initialize relay: {e}")
-                switch = Relay(None)
+
+            for port in serial_ports:
+                try:
+                    switch = Relay(port)
+                    print("Relay initialized successfully")
+
+                    return switch
+                except Exception as error:
+                    print(f"Failed to initialize relay: {error}")
+                    debug_switch = Relay(None)
         else:
             print("No serial ports found, using debug mode")
-            switch = Relay(None)
-        return switch
+            debug_switch = Relay(None)
+        return debug_switch
 
     def cleanup(self):
         if self.switch and self.switch.serial:
@@ -169,7 +190,7 @@ class StateManager:
 
 
 app = FastAPI()
-app.state = State({"v": StateManager()})
+# app.state = State({"v": StateManager()})
 
 
 # Add dependency
@@ -201,14 +222,24 @@ def start_window(pipe_send: Connection, url_to_load: str):
     webview.start(storage_path=tempfile.mkdtemp())
 
 
+class Holder:
+    def __init__(self, s: StateManager | None):
+        self.s = s
+
 class UvicornServer(multiprocessing.Process):
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, shared_state: SyncManager):
         super().__init__()
         self.server = Server(config=config)
         self.config = config
+        self.shared_state = shared_state
 
     def stop(self):
-        app.state.v.cleanup()
+        print("shared state: ", self.shared_state)
+        state_manager = self.shared_state.get("state_manager")
+        print("state manager: ", state_manager)
+        if state_manager:
+            state_manager.cleanup()
+            print("cleaned up relay connection")
         self.terminate()
 
     def run(self):
@@ -413,6 +444,7 @@ def re_assert(verification: Verification):
 @app.post("/channel")
 def request_channel(channel: Channel):
     print("channel number: ", channel.number)
+    print("global state manager: ", global_state_manager)
     return channel_to_state(channel.number, channel.verification)
 
 
@@ -420,6 +452,29 @@ def request_channel(channel: Channel):
 def get_tree():
     # print("tree state: ", tree_state)
     return app.state.v.tree.tree_state
+
+
+global_state_manager = Holder(None)
+
+@app.get("/initialize")
+async def initialize():
+    global global_state_manager
+    try:
+        print("starting initialization")
+        # Initialize StateManager in the same thread
+        # Initializing the state manager find and connects to the relay switch,
+        # which can take a few seconds
+        manager = await asyncio.to_thread(StateManager)
+        app.state = State({"v": manager})
+
+        print("now the state is set. Attempting to update shared state")
+        shared_state["state_manager"] = manager  # Set the shared state
+        print("finished initialization")
+        return {"ok": True}
+    except Exception as e:
+        print(f"Initialization failed: {e}")
+        raise HTTPException(status_code=500, detail="Initialization failed")
+    
 
 
 @app.post("/switch")
@@ -468,17 +523,18 @@ if __name__ == "__main__":
     server_ip = "127.0.0.1"
     server_port = 8000
     conn_recv, conn_send = multiprocessing.Pipe()
+    # init_event = multiprocessing.Event()  # Create an Event object
 
     # Start server first
     # user 1 worker for easier data sharing
     config = Config(
         "main:app", host=server_ip, port=server_port, log_level="debug", workers=1
     )
-    instance = UvicornServer(config=config)
+    instance = UvicornServer(config=config, shared_state = shared_state)
     instance.start()
 
-    # Give server time to initialize
-    time.sleep(1)
+    # # Give server time to initialize
+    # time.sleep(1)
 
     # Then start window
     windowsp = multiprocessing.Process(

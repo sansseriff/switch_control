@@ -19,12 +19,15 @@ class Relay(object):
         self.OptChan = 1
         self.serial.open()
 
+        # print(f"resource name for {visa_name}: ", self.getVersion())
+
         if self.getVersion().startswith(resource_name_prefix):
             print("Relay Connected")
         else:
             print("Relay not connected")
             self.serial.close()
             self.serial = None
+            raise ConnectionError("Failed to connect to the relay.")
 
     def read(self, bits: int):
         # print("Reading Bits")

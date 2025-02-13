@@ -13,10 +13,26 @@
 
   import { tree } from "./state.svelte";
   import TreeAndButtons from "./lib/TreeAndButtons.svelte";
-  import { reAssert } from "./api";
+  import { reAssert, initialize } from "./api";
+
+  let isLoading = $state(true);
+
+  onMount(async () => {
+    try {
+      await initialize();
+      isLoading = false;
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  });
 </script>
 
 <main>
+  {#if isLoading}
+    <div class="loading-screen">
+      <p>Loading...</p>
+    </div>
+  {:else}
   <div class="left">
     <GeneralButton
       onclick={() => tree.reAssertTree()}
@@ -30,9 +46,19 @@
   </div>
 
   <TreeAndButtons></TreeAndButtons>
+
+  {/if}
 </main>
 
 <style>
+
+  .loading-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+
   main {
     display: flex;
     flex-direction: row;
