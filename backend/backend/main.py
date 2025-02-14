@@ -96,7 +96,6 @@ class Node:
 MaybeNode = Node | int | None
 
 
-
 # # Create a Manager instance
 # manager = Manager()
 
@@ -105,7 +104,7 @@ MaybeNode = Node | int | None
 
 
 # Create an event for cleanup
-cleanup_event = Event()
+# cleanup_event = Event()
 
 
 # Scan the system for serial ports
@@ -120,7 +119,6 @@ def get_serial_ports():
         except subprocess.CalledProcessError:
             # Ignore the error if no devices are found for the current pattern
             continue
-
 
     print("these are the ports: ", ports)
 
@@ -178,7 +176,6 @@ class StateManager:
     def initialize_relay(self):
         serial_ports = get_serial_ports()
         if serial_ports:
-
             for port in serial_ports:
                 try:
                     switch = Relay(port)
@@ -233,18 +230,16 @@ def start_window(pipe_send: Connection, url_to_load: str):
 
 
 class UvicornServer(multiprocessing.Process):
-    def __init__(self, config: Config, cleanup_event: EventType):
+    def __init__(self, config: Config):
         super().__init__()
         self.server = Server(config=config)
         self.config = config
-        self.cleanup_event = cleanup_event
 
     def stop(self):
-        print("Setting cleanup event")
-        self.cleanup_event.set()
         self.terminate()
 
     def run(self):
+        print("running server")
         self.server.run()
 
 
@@ -280,7 +275,7 @@ def flatten_tree(root: MaybeNode) -> Tree:
             if isinstance(current_node.right, Node):
                 queue.append(current_node.right)
 
-    print("state: ", state)
+    # print("state: ", state)
     return Tree(**state)
 
 
@@ -455,15 +450,13 @@ def get_tree():
     return app.state.v.tree.tree_state
 
 
-
 @app.get("/initialize")
 async def initialize():
-
     # print("this is state: ", app.state)
     if app.state and app.state.__dict__.get("v"):
         print("already initialized")
         return {"ok": True}
-    
+
     try:
         # Initialize StateManager in the same thread
         # Initializing the state manager find and connects to the relay switch,
@@ -476,7 +469,6 @@ async def initialize():
     except Exception as e:
         print(f"Initialization failed: {e}")
         raise HTTPException(status_code=500, detail="Initialization failed")
-    
 
 
 @app.post("/switch")
@@ -523,8 +515,10 @@ async def cleanup():
         print(f"Cleanup failed: {e}")
         raise HTTPException(status_code=500, detail="Cleanup failed")
 
+
 if __name__ == "__main__":
     server_ip = "0.0.0.0"
+    webview_ip = "127.0.0.1"
     server_port = 8000
     conn_recv, conn_send = multiprocessing.Pipe()
     # init_event = multiprocessing.Event()  # Create an Event object
@@ -534,15 +528,17 @@ if __name__ == "__main__":
     config = Config(
         "main:app", host=server_ip, port=server_port, log_level="debug", workers=1
     )
-    instance = UvicornServer(config=config, cleanup_event=cleanup_event)
+    instance = UvicornServer(config=config)
     instance.start()
+
+    print("Server started")
 
     # # Give server time to initialize
     # time.sleep(1)
 
     # Then start window
     windowsp = multiprocessing.Process(
-        target=start_window, args=(conn_send, f"http://{server_ip}:{server_port}/")
+        target=start_window, args=(conn_send, f"http://{webview_ip}:{server_port}/")
     )
     windowsp.start()
 

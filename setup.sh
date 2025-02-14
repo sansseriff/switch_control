@@ -3,8 +3,13 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-# Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# Check if uv is installed
+if ! command -v uv &> /dev/null; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+else
+    echo "uv is already installed"
+fi
 
 # Navigate to the backend directory
 cd backend

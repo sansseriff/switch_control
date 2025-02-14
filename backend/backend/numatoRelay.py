@@ -128,12 +128,12 @@ class Relay(object):
 
     def send_pulse(self, channel: int, pulseWidth: float, verification: Verification):
         assert verification.verified, "Verification not complete"
-        startime = time.time()
+        # startime = time.time()
         self.turn_on(channel, verification)
         time.sleep(float(pulseWidth / 1000))
         self.turn_off(channel, verification)
-        t1 = time.time()
-        print("t1 - starttime: ", t1 - startime)
+        # t1 = time.time()
+        # print("t1 - starttime: ", t1 - startime)
 
     def close(self):
         self.TurnOffOptChannel()
