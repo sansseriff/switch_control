@@ -2,13 +2,24 @@ import type Tree from "./lib/TreeDiagram.svelte";
 import type { TreeState } from "./types";
 import type { Verification } from "./types";
 
+
+function isPywebview() {
+    return typeof window.QObject !== 'undefined';
+  }
+
+
+
 function fetchWithConfig(url: string, method: string, body?: any): Promise<any> {
     const headers = { 'Content-Type': 'application/json' };
     const controller = new AbortController();
     const signal = controller.signal;
 
     // Specify the base URL of the different server
-    const baseUrl = "http://127.0.0.1:8000";
+
+    const isWebView = isPywebview();
+    console.log("isWebView: ", isWebView);
+
+    const baseUrl = isWebView ? "http://0.0.0.0:8000" : "";
 
     const config: RequestInit = {
         method,

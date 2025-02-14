@@ -24,10 +24,15 @@ from verification import Verification
 from multiprocessing.connection import Connection
 from starlette.datastructures import State
 from fastapi import HTTPException
-from multiprocessing import Manager
+from multiprocessing import Manager, Event
 
 # import SyncManager type
 from multiprocessing.managers import SyncManager
+from multiprocessing.synchronize import Event as EventType
+import requests
+
+# import Event type from multiprocessing
+
 
 # from location import THISS
 
@@ -92,11 +97,15 @@ MaybeNode = Node | int | None
 
 
 
-# Create a Manager instance
-manager = Manager()
+# # Create a Manager instance
+# manager = Manager()
 
-# Create a shared dictionary
-shared_state = manager.dict()
+# # Create a shared dictionary
+# shared_state = manager.dict()
+
+
+# Create an event for cleanup
+cleanup_event = Event()
 
 
 # Scan the system for serial ports
@@ -219,27 +228,20 @@ def start_window(pipe_send: Connection, url_to_load: str):
         "Switch Control", url=url_to_load, resizable=True, width=800, height=412
     )
     win.events.closed += on_closed
-    webview.start(storage_path=tempfile.mkdtemp())
+    webview.start(storage_path=tempfile.mkdtemp(), debug=True)
+    win.evaluate_js("window.special = 3")
 
-
-class Holder:
-    def __init__(self, s: StateManager | None):
-        self.s = s
 
 class UvicornServer(multiprocessing.Process):
-    def __init__(self, config: Config, shared_state: SyncManager):
+    def __init__(self, config: Config, cleanup_event: EventType):
         super().__init__()
         self.server = Server(config=config)
         self.config = config
-        self.shared_state = shared_state
+        self.cleanup_event = cleanup_event
 
     def stop(self):
-        print("shared state: ", self.shared_state)
-        state_manager = self.shared_state.get("state_manager")
-        print("state manager: ", state_manager)
-        if state_manager:
-            state_manager.cleanup()
-            print("cleaned up relay connection")
+        print("Setting cleanup event")
+        self.cleanup_event.set()
         self.terminate()
 
     def run(self):
@@ -444,7 +446,6 @@ def re_assert(verification: Verification):
 @app.post("/channel")
 def request_channel(channel: Channel):
     print("channel number: ", channel.number)
-    print("global state manager: ", global_state_manager)
     return channel_to_state(channel.number, channel.verification)
 
 
@@ -454,21 +455,22 @@ def get_tree():
     return app.state.v.tree.tree_state
 
 
-global_state_manager = Holder(None)
 
 @app.get("/initialize")
 async def initialize():
-    global global_state_manager
+
+    # print("this is state: ", app.state)
+    if app.state and app.state.__dict__.get("v"):
+        print("already initialized")
+        return {"ok": True}
+    
     try:
-        print("starting initialization")
         # Initialize StateManager in the same thread
         # Initializing the state manager find and connects to the relay switch,
         # which can take a few seconds
         manager = await asyncio.to_thread(StateManager)
         app.state = State({"v": manager})
 
-        print("now the state is set. Attempting to update shared state")
-        shared_state["state_manager"] = manager  # Set the shared state
         print("finished initialization")
         return {"ok": True}
     except Exception as e:
@@ -510,17 +512,19 @@ def toggle_switch(
     return app.state.v.tree.tree_state
 
 
-# don't want to heat things up unnecessarily
-# init_tree()
-
-# if __name__ == "__main__":
-#     multiprocessing.freeze_support()  # For Windows support
-
-#     run(app, host="0.0.0.0", port=9050, reload=False, workers=1)
-
+@app.post("/cleanup")
+async def cleanup():
+    try:
+        if app.state and app.state.v:
+            app.state.v.cleanup()
+            print("Cleanup done")
+        return {"ok": True}
+    except Exception as e:
+        print(f"Cleanup failed: {e}")
+        raise HTTPException(status_code=500, detail="Cleanup failed")
 
 if __name__ == "__main__":
-    server_ip = "127.0.0.1"
+    server_ip = "0.0.0.0"
     server_port = 8000
     conn_recv, conn_send = multiprocessing.Pipe()
     # init_event = multiprocessing.Event()  # Create an Event object
@@ -530,7 +534,7 @@ if __name__ == "__main__":
     config = Config(
         "main:app", host=server_ip, port=server_port, log_level="debug", workers=1
     )
-    instance = UvicornServer(config=config, shared_state = shared_state)
+    instance = UvicornServer(config=config, cleanup_event=cleanup_event)
     instance.start()
 
     # # Give server time to initialize
@@ -546,5 +550,11 @@ if __name__ == "__main__":
     while "closed" not in window_status:
         window_status = conn_recv.recv()
         print(f"got {window_status}", flush=True)
+
+    # Call the /cleanup endpoint
+    try:
+        response = requests.post(f"http://{server_ip}:{server_port}/cleanup")
+    except Exception as e:
+        print(f"Exception while calling cleanup endpoint: {e}")
 
     instance.stop()
