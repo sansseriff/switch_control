@@ -15,4 +15,4 @@ fi
 cd "$TARGET_DIR/switch_control"
 
 # Run the setup script
-bash setup.sh
+bash -i setup.sh
