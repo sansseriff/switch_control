@@ -47,7 +47,7 @@ echo "Setting up web assets..."
 echo 
 echo -e "${YELLOW}Do you want to download pre-built html/javascript files for the user interface, or install the tooling to modify and build these files?${NC}"
 echo -e "${YELLOW}1) Download pre-built files${NC}"
-echo -e "${YELLOW}2) Install tooling (Bun javascipt runtime) to modify and build web assets (for development)${NC}"
+echo -e "${YELLOW}2) Install tooling (Bun javascipt runtime) for building svelte-based UI (for development)${NC}"
 
 read -p "Enter your choice (1 or 2): " web_choice
 
