@@ -42,7 +42,7 @@ mkdir -p ./backend/backend/switch_web
 
 if [ "$web_choice" = "1" ]; then
     echo "Downloading pre-built web assets..."
-    curl -L curl -L https://github.com/sansseriff/switch_control/releases/latest/download/switch_web.zip -o switch_web.zip
+    curl -L https://github.com/sansseriff/switch_control/releases/latest/download/switch_web.zip -o switch_web.zip
     unzip -o switch_web.zip -d ./backend/backend/
     rm switch_web.zip
     echo "Web assets downloaded successfully"
@@ -65,6 +65,6 @@ fi
 # Print colored instructions
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
-echo -e "${GREEN}Setup complete! Do 'cd switch_control' and the either: ${NC}"
+echo -e "${GREEN}Setup complete! Do 'cd switch_control' and then either: ${NC}"
 echo -e "${GREEN}1. Run the script with: sh run.sh${NC}"
 echo -e "${GREEN}2. Run directly with uv: cd ./backend/backend && uv run main.py${NC}"
