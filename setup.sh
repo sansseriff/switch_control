@@ -42,7 +42,7 @@ mkdir -p ./backend/backend/switch_web
 
 if [ "$web_choice" = "1" ]; then
     echo "Downloading pre-built web assets..."
-    curl -L https://github.com/sansseriff/switch_control/releases/download/0.0.1/switch_web.zip -o switch_web.zip
+    curl -L curl -L https://github.com/sansseriff/switch_control/releases/latest/download/switch_web.zip -o switch_web.zip
     unzip -o switch_web.zip -d ./backend/backend/
     rm switch_web.zip
     echo "Web assets downloaded successfully"
