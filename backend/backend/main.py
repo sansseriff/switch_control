@@ -7,7 +7,7 @@ import asyncio
 import multiprocessing
 from pathlib import Path
 
-# from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -198,6 +198,15 @@ class StateManager:
 app = FastAPI()
 # app.state = State({"v": StateManager()})
 
+# Add CORS middleware with permissive settings
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+)
+
 
 # Add dependency
 def get_state_manager():
@@ -225,7 +234,7 @@ def start_window(pipe_send: Connection, url_to_load: str):
         "Switch Control", url=url_to_load, resizable=True, width=800, height=412
     )
     win.events.closed += on_closed
-    webview.start(storage_path=tempfile.mkdtemp(), debug=True)
+    webview.start(storage_path=tempfile.mkdtemp(), debug=False)
     win.evaluate_js("window.special = 3")
 
 
