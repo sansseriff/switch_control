@@ -19,7 +19,7 @@ function fetchWithConfig(url: string, method: string, body?: any): Promise<any> 
     const isWebView = isPywebview();
     console.log("isWebView: ", isWebView);
 
-    const baseUrl = isWebView ? "http://0.0.0.0:8000" : "";
+    const baseUrl = isWebView ? "http://127.0.0.1:1200" : "";
 
     const config: RequestInit = {
         method,

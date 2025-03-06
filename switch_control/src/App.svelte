@@ -29,13 +29,13 @@
   onMount(async () => {
     try {
       // this delay is needed for the webview to gain certain
-      // features that let it be identified as a webview in 
+      // features that let it be identified as a webview in
       // api.ts
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
       await initialize();
       isLoading = false;
     } catch (error) {
-      console.error('Error:', error);
+      console.error("Error:", error);
     }
   });
 </script>
@@ -46,25 +46,24 @@
       <p>Loading...</p>
     </div>
   {:else}
-  <div class="left">
-    <GeneralButton
-      onclick={() => tree.reAssertTree()}
-      info="Re-send pulses for current configuration">Re-Assert</GeneralButton
-    >
+    <div class="left">
+      <GeneralButton
+        onclick={() => tree.reAssertTree()}
+        info="Re-send pulses for current configuration">Re-Assert</GeneralButton
+      >
 
-    <GeneralButton
-      info="Reset all switches to default position"
-      onclick={() => tree.resetTree()}>Reset</GeneralButton
-    >
-  </div>
-
-  <TreeAndButtons></TreeAndButtons>
-
+      <GeneralButton
+        info="Reset all switches to default position"
+        onclick={() => tree.resetTree()}>Reset</GeneralButton
+      >
+    </div>
+    <div class="right">
+      <div class="inside"><TreeAndButtons></TreeAndButtons></div>
+    </div>
   {/if}
 </main>
 
 <style>
-
   .loading-screen {
     display: flex;
     justify-content: center;
@@ -79,6 +78,7 @@
     margin: 0;
 
     margin: 1rem;
+    height: calc(100vh - 2rem);
   }
 
   .left {
@@ -95,5 +95,28 @@
     /* margin-left: 2rem; */
     margin-right: 1rem;
     border: 1px solid rgb(237, 237, 237);
+  }
+
+  .right {
+    display: flex;
+    /* flex-direction: column;
+    justify-content: center;
+    align-items: center; */
+    /* padding-top: 0.1rem; */
+    border-radius: 8px;
+    padding-left: 3.7rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    border: 1px solid rgb(237, 237, 237);
+    background-color: white;
+  }
+
+  .inside {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin: auto;
   }
 </style>

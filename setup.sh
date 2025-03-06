@@ -4,11 +4,11 @@
 set -e
 
 # Define colors
-YELLOW='\033[1;33m'
+PURPLE='\033[0;35m'  # Changed from YELLOW to PURPLE with purple color code
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}This setup uses the UV python package manager to build a local portable python installation. Press 1 to continue with UV, or 2 to setup your python environment manually${NC}"
+echo -e "${PURPLE}This setup uses the UV python package manager to build a local portable python installation. Press 1 to continue with UV, or 2 to setup your python environment manually${NC}"
 read -p "Enter your choice (1 or 2): " py_choice
 
 if [ "$py_choice" = "1" ]; then
@@ -45,9 +45,9 @@ fi
 
 echo "Setting up web assets..."
 echo 
-echo -e "${YELLOW}Do you want to download pre-built html/javascript files for the user interface, or install the tooling to modify and build these files?${NC}"
-echo -e "${YELLOW}1) Download pre-built files${NC}"
-echo -e "${YELLOW}2) Install tooling (Bun javascipt runtime) for building svelte-based UI (for development)${NC}"
+echo -e "${PURPLE}Do you want to download pre-built html/javascript files for the user interface, or install the tooling to modify and build these files?${NC}"
+echo -e "${PURPLE}1) Download pre-built files${NC}"
+echo -e "${PURPLE}2) Install tooling (Bun javascipt runtime) for building svelte-based UI (for development)${NC}"
 
 read -p "Enter your choice (1 or 2): " web_choice
 

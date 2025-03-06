@@ -526,9 +526,9 @@ async def cleanup():
 
 
 if __name__ == "__main__":
-    server_ip = "0.0.0.0"
+    server_ip = "127.0.0.1"
     webview_ip = "127.0.0.1"
-    server_port = 8000
+    server_port = 1200
     conn_recv, conn_send = multiprocessing.Pipe()
     # init_event = multiprocessing.Event()  # Create an Event object
 

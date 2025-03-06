@@ -170,15 +170,10 @@
 
   .container {
     display: flex;
-    flex-direction: row;
-    justify-content: left;
-    padding-top: 0.1rem;
-    border: 1px solid rgb(237, 237, 237);
-    background-color: white;
-    border-radius: 8px;
-    padding-left: 5rem;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+    /* flex-direction: row; */
+    
+    margin: auto;
+    height: 315px;
   }
 
   .buttons {
