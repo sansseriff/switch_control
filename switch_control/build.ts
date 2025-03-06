@@ -21,19 +21,25 @@ await $`bun run build`;
 
 console.log('\x1b[33m >>>>> Moving compiled javascript, css, & html to /backend/backend/switch_web/ \x1b[0m');
 
+// Check if output directory exists and remove it first
+if (existsSync(output_directory)) {
+    console.log('\x1b[33m >>>>> Removing existing output directory... \x1b[0m');
+    if (process.platform === "win32") {
+        // rm -rf is not working in bun shell yet as of Bun 1.1.34
+        execSync(`rmdir /S /Q ${output_directory}`, { stdio: 'inherit' });
+    } else {
+        await $`rm -rf ${output_directory}`;
+    }
+}
 
+// Create output directory
+console.log('\x1b[33m >>>>> Creating output directory... \x1b[0m');
 if (process.platform === "win32") {
-
-    // rm -rf is not working in bun shell yet as of Bun 1.1.34
-    // execSync(`del /Q /S ${path.join(output_directory,  "/*")}`, { stdio: 'inherit' });
-    execSync(`rmdir /S /Q ${output_directory}`, { stdio: 'inherit' });
     execSync(`mkdir ${output_directory}`, { stdio: 'inherit' });
 } else {
-    await $`rm -rf ${path.join(output_directory)}`;
     await $`mkdir -p ${output_directory}`;
 }
-// process.exit(1);
 
-await $`mkdir -p ${output_directory}`;
+// Copy files
 await $`cp -R ${path.join(dist_directory, "assets")} ${output_directory}`;
 await $`cp ${path.join(dist_directory, "index.html")} ${output_directory}`;
