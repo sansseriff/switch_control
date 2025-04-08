@@ -47,7 +47,7 @@ interface ChannelRequest {
     verification: Verification;
 }
 
-interface SwitchRequest {
+interface ToggleRequest {
     number: number;
     verification: Verification;
 }
@@ -61,7 +61,7 @@ export function requestChannel(channel_request: ChannelRequest): Promise<TreeSta
 }
 
 
-export function flipSwitch(switch_toggle_request: SwitchRequest): Promise<TreeState> {
+export function flipSwitch(switch_toggle_request: ToggleRequest): Promise<TreeState> {
     return fetchWithConfig('/switch', 'POST', switch_toggle_request);
 }
 
@@ -70,12 +70,12 @@ export function getTreeState(): Promise<TreeState> {
     return fetchWithConfig('/tree', 'GET');
 }
 
-export function reset(): Promise<TreeState> {
-    return fetchWithConfig('/reset', 'GET');
+export function reset(verification: Verification): Promise<TreeState> {
+    return fetchWithConfig('/reset', 'POST', verification );
 }
 
-export function reAssert(): Promise<TreeState> {
-    return fetchWithConfig('/re_assert', 'GET');
+export function reAssert(verification: Verification): Promise<TreeState> {
+    return fetchWithConfig('/re_assert', 'POST', verification );
 }
 
 export async function initialize(): Promise<void> {

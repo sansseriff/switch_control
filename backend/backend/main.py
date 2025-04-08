@@ -48,7 +48,7 @@ class Channel(BaseModel):
     verification: Verification
 
 
-class Sw(BaseModel):
+class ToggleRequest(BaseModel):
     number: int
     verification: Verification
 
@@ -234,7 +234,7 @@ def start_window(pipe_send: Connection, url_to_load: str):
         "Switch Control", url=url_to_load, resizable=True, width=800, height=412
     )
     win.events.closed += on_closed
-    webview.start(storage_path=tempfile.mkdtemp(), debug=False)
+    webview.start(storage_path=tempfile.mkdtemp(), debug=True)
     win.evaluate_js("window.special = 3")
 
 
@@ -481,11 +481,8 @@ async def initialize():
 
 
 @app.post("/switch")
-def toggle_switch(
-    swp: Sw,
-    verification: Verification,
-):
-    sw = app.state.v.nodes[swp.number - 1]
+def toggle_switch(toggle: ToggleRequest):
+    sw = app.state.v.nodes[toggle.number - 1]
     print("the switch to toggle: ", sw.relay_name)
 
     if not sw.polarity:
@@ -493,20 +490,20 @@ def toggle_switch(
         sw.polarity = True
 
         idx = int(sw.relay_index)
-        app.state.v.switch.turn_off(0, verification)
+        app.state.v.switch.turn_off(0, toggle.verification)
         time.sleep(SLEEP_TIME)
-        app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
+        app.state.v.switch.send_pulse(idx, PULSE_TIME, toggle.verification)
 
     else:
         # flip the relay
         sw.polarity = False
 
         idx = int(sw.relay_index)
-        app.state.v.switch.turn_on(0, verification)
+        app.state.v.switch.turn_on(0, toggle.verification)
         time.sleep(SLEEP_TIME)
-        app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
+        app.state.v.switch.send_pulse(idx, PULSE_TIME, toggle.verification)
         time.sleep(SLEEP_TIME)
-        app.state.v.switch.turn_off(0, verification)
+        app.state.v.switch.turn_off(0, toggle.verification)
 
     update_color()
     app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)

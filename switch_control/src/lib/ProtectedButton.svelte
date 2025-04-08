@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { createTooltip, melt } from "@melt-ui/svelte";
-  import type { CreateTooltipProps } from "@melt-ui/svelte";
+  // import { createTooltip, melt } from "@melt-ui/svelte";
+  // import type { CreateTooltipProps } from "@melt-ui/svelte";
   import { fade } from "svelte/transition";
   import type { Verification } from "../types";
   import { createDialog } from "@melt-ui/svelte";
@@ -9,6 +9,8 @@
   import X from "phosphor-svelte/lib/X";
   import GeneralButton from "./GeneralButton.svelte";
   import { fromStore } from "svelte/store";
+  import { Dialog, Label, Separator } from "bits-ui";
+  import { getPortalDestination } from "@melt-ui/svelte/internal/helpers";
 
   interface Props {
     onVerifiedClick: (verification: Verification) => void;
@@ -17,6 +19,10 @@
     highlighted?: boolean;
     info?: string;
   }
+
+  // let myOpen = $state(false);
+
+  let isOpen = $state(false);
 
   let {
     onVerifiedClick,
@@ -28,33 +34,33 @@
 
   // this is so much code just to deactivate the tooltip
   // https://www.melt-ui.com/docs/controlled
-  const handleOpen: CreateTooltipProps["onOpenChange"] = ({ curr, next }) => {
-    if (!info) {
-      return curr;
-    }
-    return next;
-  };
+  // const handleOpen: CreateTooltipProps["onOpenChange"] = ({ curr, next }) => {
+  //   if (!info) {
+  //     return curr;
+  //   }
+  //   return next;
+  // };
 
-  let {
-    elements: {
-      trigger: trigger_tooltip,
-      content: content_tooltip,
-      arrow: arrow_tooltip,
-    },
-    states: { open: open_tooltip },
-  } = createTooltip({
-    positioning: {
-      placement: "bottom-start",
-    },
-    onOpenChange: handleOpen,
-    openDelay: 500,
-    closeDelay: 100,
-    closeOnPointerDown: false,
-    forceVisible: true,
-  });
+  // let {
+  //   elements: {
+  //     trigger: trigger_tooltip,
+  //     content: content_tooltip,
+  //     arrow: arrow_tooltip,
+  //   },
+  //   states: { open: open_tooltip },
+  // } = createTooltip({
+  //   positioning: {
+  //     placement: "bottom-start",
+  //   },
+  //   onOpenChange: handleOpen,
+  //   openDelay: 500,
+  //   closeDelay: 100,
+  //   closeOnPointerDown: false,
+  //   forceVisible: true,
+  // });
 
   function handleVerifiedClick() {
-    open.set(false);
+    isOpen = false;
     const verification = {
       verified: true,
       timestamp: Date.now(),
@@ -65,34 +71,50 @@
 
   // dialog
   // https://www.melt-ui.com/docs/builders/dialog
-  const {
-    elements: {
-      trigger,
-      overlay,
-      content,
-      title,
-      description,
-      close,
-      portalled,
-    },
-    states: { open },
-  } = createDialog({
-    role: "alertdialog",
-    forceVisible: true,
-  });
+  // const {
+  //   elements: {
+  //     trigger,
+  //     overlay,
+  //     content,
+  //     title,
+  //     description,
+  //     close,
+  //     portalled,
+  //   },
+  //   states: { open },
+  // } = createDialog({
+  //   role: "alertdialog",
+  //   forceVisible: true,
+  // });
+
+  // function getOpen() {
+  //   return myOpen;
+  // }
+
+  // function setOpen(newOpen: boolean) {
+  //   myOpen = newOpen;
+  // }
 </script>
 
+<!-- <Dialog.Trigger class="button light">
+  {@render children()}
+</Dialog.Trigger> -->
+
 <button
-  class="button light"
-  use:melt={$trigger_tooltip}
-  use:melt={$trigger}
+  class="button light m-3"
+  aria-label="switch_toggle"
+  onclick={() => {
+    isOpen = true;
+  }}
   class:highlighted
   style="width: {width_rem}rem"
 >
   {@render children()}
 </button>
 
-{#if $open_tooltip}
+<!-- <div class="bg-red-100">Is tailwind working?</div> -->
+
+<!-- {#if $open_tooltip}
   <div
     use:melt={$content_tooltip}
     transition:fade={{ duration: 100 }}
@@ -101,9 +123,9 @@
     <div class="arrow" use:melt={$arrow_tooltip}></div>
     <p class="info-content">{info}</p>
   </div>
-{/if}
+{/if} -->
 
-{#if $open}
+<!-- {#if $open}
   <div use:melt={$portalled}>
     <div use:melt={$overlay} class="overlay"></div>
     <div
@@ -132,7 +154,45 @@
       </button>
     </div>
   </div>
-{/if}
+{/if} -->
+
+<Dialog.Root bind:open={isOpen}>
+  <Dialog.Portal>
+    <Dialog.Overlay class="bg-white" />
+    <Dialog.Content
+      class="rounded-md bg-background shadow-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 outline-hidden fixed left-[50%] top-[50%] z-50 w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] border p-5 sm:max-w-[490px] md:w-full"
+    >
+      <Dialog.Title
+        class="flex w-full items-center justify-left text-lg font-semibold tracking-tight"
+      >
+        Is the cryoamp turned on?
+      </Dialog.Title>
+      <Separator.Root class="bg-muted -mx-5 mb-6 mt-5 block h-px" />
+      <Dialog.Description class="text-foreground-alt text-sm">
+        If the cryoamp is powered, triggering the switch will damage it.
+      </Dialog.Description>
+      <div class="flex flex-col items-start gap-1 pb-11 pt-7"></div>
+      <div class="flex w-full justify-end">
+        <Dialog.Close
+          onclick={() => {
+            console.log("clicked");
+          }}
+          class="h-input rounded-input bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-dark focus-visible:ring-offset-background focus-visible:outline-hidden inline-flex items-center justify-center px-[50px] text-[15px] font-semibold focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.98]"
+        >
+          Save
+        </Dialog.Close>
+      </div>
+      <Dialog.Close
+        class="focus-visible:ring-foreground focus-visible:ring-offset-background focus-visible:outline-hidden absolute right-5 top-5 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.98]"
+      >
+        <div>
+          <X class="text-foreground size-5" />
+          <span class="sr-only">Close</span>
+        </div>
+      </Dialog.Close>
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
 
 <style>
   .overlay {

@@ -1,0 +1,1 @@
+cd switch_control && SKIP_LOADING=true bun run dev

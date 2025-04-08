@@ -14,17 +14,11 @@
   import { tree } from "./state.svelte";
   import TreeAndButtons from "./lib/TreeAndButtons.svelte";
   import { reAssert, initialize } from "./api";
+  import ProtectedButton from "./lib/ProtectedButton.svelte";
+  // console.log("import.meta.env.SKIP_LOADING ", import.meta.env.SKIP_LOADING);
+  let isLoading = $state(import.meta.env.SKIP_LOADING !== "true");
 
-  let isLoading = $state(true);
-
-  // onMount(async () => {
-  //   try {
-  //     await initialize();
-  //     isLoading = false;
-  //   } catch (error) {
-  //     console.error('Error:', error);
-  //   }
-  // });
+  // console.log("isLoading", $state.snapshot(isLoading));
 
   onMount(async () => {
     try {
@@ -41,21 +35,26 @@
 </script>
 
 <main>
+  <!-- <div class="bg-red-100">Is tailwind working?</div> -->
+
   {#if isLoading}
     <div class="loading-screen">
       <p>Loading...</p>
     </div>
   {:else}
     <div class="left">
-      <GeneralButton
-        onclick={() => tree.reAssertTree()}
-        info="Re-send pulses for current configuration">Re-Assert</GeneralButton
+      <ProtectedButton
+        onVerifiedClick={(v) => tree.reAssertTree(v)}
+        width_rem={5.5}
       >
-
-      <GeneralButton
-        info="Reset all switches to default position"
-        onclick={() => tree.resetTree()}>Reset</GeneralButton
+        ReAssert
+      </ProtectedButton>
+      <ProtectedButton
+        onVerifiedClick={(v) => tree.resetTree(v)}
+        width_rem={5.5}
       >
+        Reset
+      </ProtectedButton>
     </div>
     <div class="right">
       <div class="inside"><TreeAndButtons></TreeAndButtons></div>

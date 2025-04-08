@@ -20,32 +20,34 @@ class Tree {
   constructor() {
   }
 
-  resetTree() {
-    reset().then((ss: TreeState) => {
+  resetTree(verification: Verification) {
+    reset(verification).then((ss: TreeState) => {
       this.st = ss;
+      this.updateButtons();
     });
   }
 
-  reAssertTree() {
-    reAssert().then((ss: TreeState) => {
+  reAssertTree(verification: Verification) {
+    reAssert(verification).then((ss: TreeState) => {
       this.st = ss;
+      this.updateButtons();
     });
   }
 
-  toggle(key: string) {
+  toggle(key: string, verification: Verification) {
     // key is "R1", "R2", etc.
     // convert to idx
     let idx = parseInt(key.slice(1));
 
-    flipSwitch({ number: idx }).then((ss: TreeState) => {
-      // console.log("new state: ", ss);
-      // console.log("ss actiavted ", ss.activated_channel)
+    flipSwitch({ 
+      number: idx,
+      verification: verification 
+    }).then((ss: TreeState) => {
       this.st = ss;
       this.updateButtons();
     });
     // this.st[key].pos = !tree.st[key].pos;
     // update buttons can't go here because it will be called before the state is updated
-
   }
 
   updateButtons() {
@@ -55,7 +57,6 @@ class Tree {
     // console.log("after updating: ", this.st.activated_channel)
     // $state.snapshot(this.button_colors)
     // console.log(this.button_colors)
-
   }
 
   toChannel(idx: number, verification: Verification) {
@@ -68,6 +69,5 @@ class Tree {
     });
   }
 }
-
 
 export const tree = new Tree();
