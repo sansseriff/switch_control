@@ -1,7 +1,6 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
   import type { Verification } from "../types";
-  // import VerificationDialog from "./VerificationDialog.svelte";
+  import VerificationDialog from "./VerificationDialog.svelte";
 
   interface Props {
     onVerifiedClick: (verification: Verification) => void;
@@ -15,18 +14,16 @@
     ariaLabel = "button",
   }: Props = $props();
 
-  let dialogOpen = $state(false);
-
-  function openDialog() {
-    dialogOpen = true;
-  }
-
-  function setDialogOpen(value: boolean) {
-    dialogOpen = value;
-  }
+  let isOpen = $state(false);
 </script>
 
-<button class="clicker" aria-label={ariaLabel} onclick={openDialog}>
+<button
+  class="clicker"
+  aria-label={ariaLabel}
+  onclick={() => {
+    isOpen = true;
+  }}
+>
   <svg
     width="1.2rem"
     height="1.2rem"
@@ -43,11 +40,7 @@
   </svg>
 </button>
 
-<!-- <VerificationDialog
-  open={dialogOpen}
-  setOpen={setDialogOpen}
-  {onVerifiedClick}
-/> -->
+<VerificationDialog bind:isOpen {onVerifiedClick}></VerificationDialog>
 
 <style>
   button {

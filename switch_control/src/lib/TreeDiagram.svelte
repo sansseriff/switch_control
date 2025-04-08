@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { tweened } from "svelte/motion";
+  import { Tween } from "svelte/motion";
   import { cubicInOut } from "svelte/easing";
-  import { onMount } from "svelte";
   import type { TreeState } from "../types";
   import TreeSwitchOverlay from "./TreeSwitchOverlay.svelte";
 
@@ -11,12 +10,9 @@
 
   let { tree_state }: Props = $props();
 
-  // Create a tweened store for the rotation angle
-  const tweens = Array.from({ length: 7 }, () =>
-    tweened(1, {
-      duration: 200,
-      easing: cubicInOut,
-    }),
+  const tweens = Array.from(
+    { length: 7 },
+    () => new Tween(1, { duration: 300, easing: cubicInOut }),
   );
 
   const colors = $state(Array.from({ length: 7 }, () => "black"));
@@ -41,17 +37,11 @@
   let overlayPosition = $state({ top: 0, left: 0 }); // State to track position of the overlay
   let switch_name = $state("R1");
 
-  // console.log("state: ", tree_state);
-  // console.log("tweens: ", tweens);
-
   function updateScale(tree_state: TreeState) {
     // const state = buttons_state[3].value; // Assuming idx 3 corresponds to R4_top
     Object.entries(tree_state).forEach(([key, value], index) => {
-      // console.log("tree state: ", tree_state);
-      // console.log("key: ", key);
-      // console.log("value: ", value);
       if (index < tweens.length) {
-        tweens[index].set(value.pos ? -1 : 1);
+        tweens[index].target = value.pos ? -1 : 1;
       }
 
       if (index < colors.length) {
@@ -63,14 +53,6 @@
       }
     });
   }
-
-  // onMount(() => {
-  //   updateScale(state);
-  // });
-
-  // onMount(() => {
-  //   updateScale(tree_state);
-  // });
 
   $effect(() => {
     updateScale(tree_state);
@@ -268,7 +250,7 @@
         stroke-width="19"
         stroke-linecap="round"
         transform-origin="471px 997.5px"
-        transform="scale(1, {$tweenR4})"
+        transform="scale(1, {tweenR4.current})"
       />
       <!-- <path id="R5_bottom" d="M471 697.5C471 717.259 478.849 736.208 492.821 750.179C506.792 764.151 525.741 772 545.5 772L659 772" stroke="black" stroke-width="19" stroke-linecap="round"/> -->
       <path
@@ -278,7 +260,7 @@
         stroke-width="19"
         stroke-linecap="round"
         transform-origin="471px 697.5px"
-        transform="scale(1, {$tweenR5})"
+        transform="scale(1, {tweenR5.current})"
       />
       <!-- <path id="R6_bottom" d="M471 397.5C471 417.259 478.849 436.208 492.821 450.179C506.792 464.151 525.741 472 545.5 472L659 472" stroke="black" stroke-width="19" stroke-linecap="round"/> -->
       <path
@@ -288,7 +270,7 @@
         stroke-width="19"
         stroke-linecap="round"
         transform-origin="471px 397.5px"
-        transform="scale(1, {$tweenR6})"
+        transform="scale(1, {tweenR6.current})"
       />
       <!-- <path id="R7_bottom" d="M471 97.5C471 117.259 478.849 136.208 492.821 150.179C506.792 164.151 525.741 172 545.5 172L659 172" stroke="black" stroke-width="19" stroke-linecap="round"/> -->
       <path
@@ -298,7 +280,7 @@
         stroke-width="19"
         stroke-linecap="round"
         transform-origin="471px 97.5px"
-        transform="scale(1, {$tweenR7})"
+        transform="scale(1, {tweenR7.current})"
       />
       <!-- <path id="R2_bottom" d="M283 848L283 924C283 943.759 290.849 962.708 304.821 976.679C318.792 990.651 337.741 998.5 357.5 998.5L471 998.5" stroke="black" stroke-width="19" stroke-linecap="round"/> -->
       <path
@@ -308,7 +290,7 @@
         stroke-width="19"
         stroke-linecap="round"
         transform-origin="283px 848px"
-        transform="scale(1, {$tweenR2})"
+        transform="scale(1, {tweenR2.current})"
       />
       <!-- <path id="R3_bottom" d="M283 248L283 324C283 343.759 290.849 362.708 304.821 376.679C318.792 390.651 337.741 398.5 357.5 398.5L471 398.5" stroke="black" stroke-width="19" stroke-linecap="round"/> -->
       <path
@@ -318,7 +300,7 @@
         stroke-width="19"
         stroke-linecap="round"
         transform-origin="283px 248px"
-        transform="scale(1, {$tweenR3})"
+        transform="scale(1, {tweenR3.current})"
       />
       <!-- <path id="R1_bottom" d="M95 549.007L95 774.321C95 794.079 102.849 813.029 116.821 827C130.792 840.972 149.741 848.821 169.5 848.821L283 848.821" stroke="black" stroke-width="19" stroke-linecap="round"/> -->
       <path
@@ -328,7 +310,7 @@
         stroke-width="19"
         stroke-linecap="round"
         transform-origin="95px 549.007px"
-        transform="scale(1, {$tweenR1})"
+        transform="scale(1, {tweenR1.current})"
       />
     </g>
     <g id="Group 38" opacity="0.1">

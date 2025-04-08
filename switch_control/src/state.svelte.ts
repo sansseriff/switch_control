@@ -39,9 +39,9 @@ class Tree {
     // convert to idx
     let idx = parseInt(key.slice(1));
 
-    flipSwitch({ 
+    flipSwitch({
       number: idx,
-      verification: verification 
+      verification: verification
     }).then((ss: TreeState) => {
       this.st = ss;
       this.updateButtons();
