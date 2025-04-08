@@ -53,15 +53,15 @@ button,
   cursor: default;
 }
 
-@custom-variant dark (&:is(.dark *));
+/* @custom-variant dark (&:is(.dark *)); */
 
-@font-face {
+/* @font-face {
   font-family: "Cal Sans";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
   src: url("/CalSans-SemiBold.woff2") format("woff2");
-}
+} */
 
 :root {
   /* Colors */
