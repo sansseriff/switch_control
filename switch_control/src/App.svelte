@@ -21,16 +21,16 @@
   // console.log("isLoading", $state.snapshot(isLoading));
 
   onMount(async () => {
-    try {
+    // try {
       // this delay is needed for the webview to gain certain
       // features that let it be identified as a webview in
       // api.ts
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      await initialize();
-      isLoading = false;
-    } catch (error) {
-      console.error("Error:", error);
-    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await initialize();
+    isLoading = false;
+    // } catch (error) {
+    //   console.error("Error:", error);
+    // }
   });
 </script>
 

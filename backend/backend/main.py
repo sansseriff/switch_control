@@ -236,6 +236,7 @@ def start_window(pipe_send: Connection, url_to_load: str):
     win.events.closed += on_closed
     webview.start(storage_path=tempfile.mkdtemp(), debug=True)
     win.evaluate_js("window.special = 3")
+    print(f"Active GUI backend: {webview._webview.gui.__name__}")
 
 
 class UvicornServer(multiprocessing.Process):

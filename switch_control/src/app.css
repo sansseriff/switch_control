@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@plugin "tailwindcss-animate";
+/* @import "tailwindcss";
+@plugin "tailwindcss-animate"; */
 
 body {
   padding: 0;
@@ -47,7 +47,9 @@ button,
 button,
 [role="button"] {
   cursor: pointer;
+  border: none;
 }
+
 
 :disabled {
   cursor: default;
@@ -71,7 +73,7 @@ button,
   --foreground-alt: hsl(0 0% 32%);
   --muted: hsl(240 5% 96%);
   --muted-foreground: hsla(0 0% 9% / 0.4);
-  --border: hsl(240 6% 10%);
+  --border: hsl(0, 0%, 94%);
   --border-input: hsla(240 6% 10% / 0.17);
   --border-input-hover: hsla(240 6% 10% / 0.4);
   --border-card: hsla(240 6% 10% / 0.1);
@@ -342,7 +344,7 @@ button,
   }
 }
 
-@layer components {
+/* @layer components {
   *:not(body):not(.focus-override) {
     outline: none !important;
     &:focus-visible {
@@ -353,4 +355,4 @@ button,
   .link {
     @apply hover:text-foreground/80 focus-visible:ring-foreground focus-visible:ring-offset-background rounded-xs focus-visible:outline-hidden inline-flex items-center gap-1 font-medium underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-offset-2;
   }
-}
+} */
