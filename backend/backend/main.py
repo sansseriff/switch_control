@@ -459,40 +459,35 @@ def request_channel(channel: Channel):
 
 @app.get("/tree")
 def get_tree():
-    # print("tree state: ", tree_state)
-    return app.state.v.tree.tree_state
+    # this will error if the tree is not initialized
+
+    try: 
+        return app.state.v.tree.tree_state
+    except:
+        print("/tree endpoint called before initialization")
+        
 
 
 @app.get("/initialize")
 async def initialize():
-    # print("this is state: ", app.state)
-
-    # print("app state: ", app.state)
-    # print("app state v: ", app.state.v.tree.tree_state)
-
     val = False
     try:
         val = app.state.v.tree.tree_state
     except AttributeError:
         print("tree state not initialized")
 
-    print("val: ", val)
-
     if val:
         print("already initialized")
-
         return app.state.v.tree.tree_state
 
     try:
-        print(" INIT FOR FIRST TIME")
-        # Initialize StateManager in the same thread
-        # Initializing the state manager find and connects to the relay switch,
-        # which can take a few seconds
         manager = await asyncio.to_thread(StateManager)
         app.state = State({"v": manager})
 
-        print("finished initialization")
-        return app.state.v.tree.tree_state
+        # after the above two lines, this call should work
+        tree_state = app.state.v.tree.tree_state
+        return tree_state
+                
     except Exception as e:
         print(f"Initialization failed: {e}")
         raise HTTPException(status_code=500, detail="Initialization failed")
@@ -570,12 +565,14 @@ if __name__ == "__main__":
     # time.sleep(1)
 
     # Then start window
+
+
     windowsp = multiprocessing.Process(
         target=start_window, args=(conn_send, f"http://{webview_ip}:{server_port}/", args.debug)
     )
-    print("window defined")
+    
     windowsp.start()
-    print("window started")
+    
 
     window_status = ""
     while "closed" not in window_status:

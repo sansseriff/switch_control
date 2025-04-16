@@ -22,9 +22,10 @@ class Tree {
   }
 
   init() {
-    initialize().then((ss: TreeState) => {
+    return initialize().then((ss: TreeState) => {
       this.st = ss;
       this.updateButtons();
+      return ss; // Optionally return the state if needed
     });
   }
 

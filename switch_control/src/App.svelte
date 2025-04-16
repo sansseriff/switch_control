@@ -18,15 +18,14 @@
   // console.log("import.meta.env.SKIP_LOADING ", import.meta.env.SKIP_LOADING);
   let isLoading = $state(import.meta.env.SKIP_LOADING !== "true");
 
-  // console.log("isLoading", $state.snapshot(isLoading));
-
   onMount(async () => {
-    // try {
-      // this delay is needed for the webview to gain certain
-      // features that let it be identified as a webview in
-      // api.ts
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    // await new Promise((resolve) => setTimeout(resolve, 1));
     await tree.init();
+    // even though I don't use the ouptut of tree.init(), its important that 
+    // that it returns a promise. Because awaiting that promise delays the 
+    // setting of isLoading to false. If isLoading is set to false too soon,
+    // then the onMount function in contained components will trigger 
+    // api calls to get_tree before the tree is initialized. Causing an error. 
     isLoading = false;
   });
 </script>
