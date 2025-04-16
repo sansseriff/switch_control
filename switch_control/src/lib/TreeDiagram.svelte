@@ -58,14 +58,16 @@
     updateScale(tree_state);
   });
 
-  function handleMouseEnter(event, switchId) {
+  function handleMouseEnter(event, switchId: number) {
     showOverlay = true;
     const rect = event.target.getBoundingClientRect();
     overlayPosition = {
       top: rect.top + window.scrollY,
       left: rect.left + window.scrollX,
     };
+    console.log("setting overlay switchId", switchId);
     switch_name = `R${switchId}`; // Example switch name
+    console.log("setting overlay switch_name", switch_name);
   }
 
   function handleMouseLeave(event) {

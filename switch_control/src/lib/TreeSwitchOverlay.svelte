@@ -11,6 +11,14 @@
   function handleVerifiedClick(verification: Verification) {
     tree.toggle(name, verification);
   }
+
+  $effect(() => {
+    console.log("name", name);
+  });
+
+  // $inspect(name, "name is a prop");
+
+
 </script>
 
 <div class="container">
@@ -31,17 +39,18 @@
   }
 
   .label {
+    color: black;
     box-sizing: border-box;
     margin-left: 2rem;
     display: inline-flex;
     align-items: center;
-    justify-content: right;
+    justify-content: flex-end;
     border-radius: 2rem;
     width: 3.3rem;
     height: 1.6rem;
     padding-right: 0.2rem;
     padding-top: 0.1rem;
-    font-size: 200;
+    font-size: 1.0rem;
     background-color: rgb(246, 246, 246);
     border: 1.5px solid rgb(235, 235, 235);
     position: relative;
