@@ -25,12 +25,9 @@
       // this delay is needed for the webview to gain certain
       // features that let it be identified as a webview in
       // api.ts
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    await initialize();
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await tree.init();
     isLoading = false;
-    // } catch (error) {
-    //   console.error("Error:", error);
-    // }
   });
 </script>
 

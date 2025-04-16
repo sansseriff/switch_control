@@ -30,6 +30,7 @@ from multiprocessing import Manager, Event
 from multiprocessing.managers import SyncManager
 from multiprocessing.synchronize import Event as EventType
 import requests
+import argparse  # Add this import
 
 # import Event type from multiprocessing
 
@@ -226,7 +227,7 @@ REMEMBER_STATE: bool = False
 # OSX: ls /dev/*usb*
 
 
-def start_window(pipe_send: Connection, url_to_load: str):
+def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
     def on_closed():
         pipe_send.send("closed")
 
@@ -234,9 +235,9 @@ def start_window(pipe_send: Connection, url_to_load: str):
         "Switch Control", url=url_to_load, resizable=True, width=800, height=412
     )
     win.events.closed += on_closed
-    webview.start(storage_path=tempfile.mkdtemp(), debug=True)
+    webview.start(storage_path=tempfile.mkdtemp(), debug=None)
     win.evaluate_js("window.special = 3")
-    print(f"Active GUI backend: {webview._webview.gui.__name__}")
+    # print(f"Active GUI backend: {webview._webview.gui.__name__}")
 
 
 class UvicornServer(multiprocessing.Process):
@@ -332,6 +333,8 @@ def re_assert_tree(verification: Verification):
     app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
 
     return app.state.v.tree.tree_state
+
+
 
 
 def update_color():
@@ -463,11 +466,25 @@ def get_tree():
 @app.get("/initialize")
 async def initialize():
     # print("this is state: ", app.state)
-    if app.state and app.state.__dict__.get("v"):
+
+    # print("app state: ", app.state)
+    # print("app state v: ", app.state.v.tree.tree_state)
+
+    val = False
+    try:
+        val = app.state.v.tree.tree_state
+    except AttributeError:
+        print("tree state not initialized")
+
+    print("val: ", val)
+
+    if val:
         print("already initialized")
-        return {"ok": True}
+
+        return app.state.v.tree.tree_state
 
     try:
+        print(" INIT FOR FIRST TIME")
         # Initialize StateManager in the same thread
         # Initializing the state manager find and connects to the relay switch,
         # which can take a few seconds
@@ -475,7 +492,7 @@ async def initialize():
         app.state = State({"v": manager})
 
         print("finished initialization")
-        return {"ok": True}
+        return app.state.v.tree.tree_state
     except Exception as e:
         print(f"Initialization failed: {e}")
         raise HTTPException(status_code=500, detail="Initialization failed")
@@ -523,9 +540,18 @@ async def cleanup():
         raise HTTPException(status_code=500, detail="Cleanup failed")
 
 
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Switch Control Backend')
+    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    server_ip = "localhost"
-    webview_ip = "localhost"
+    args = parse_arguments()
+    log_level = "debug" if args.debug else None
+    
+    server_ip = "0.0.0.0"
+    webview_ip = "0.0.0.0"
     server_port = 8000
     conn_recv, conn_send = multiprocessing.Pipe()
     # init_event = multiprocessing.Event()  # Create an Event object
@@ -533,7 +559,7 @@ if __name__ == "__main__":
     # Start server first
     # user 1 worker for easier data sharing
     config = Config(
-        "main:app", host=server_ip, port=server_port, log_level="debug", workers=1
+        "main:app", host=server_ip, port=server_port, log_level=log_level, workers=1
     )
     instance = UvicornServer(config=config)
     instance.start()
@@ -545,9 +571,11 @@ if __name__ == "__main__":
 
     # Then start window
     windowsp = multiprocessing.Process(
-        target=start_window, args=(conn_send, f"http://{webview_ip}:{server_port}/")
+        target=start_window, args=(conn_send, f"http://{webview_ip}:{server_port}/", args.debug)
     )
+    print("window defined")
     windowsp.start()
+    print("window started")
 
     window_status = ""
     while "closed" not in window_status:

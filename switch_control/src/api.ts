@@ -78,9 +78,10 @@ export function reAssert(verification: Verification): Promise<TreeState> {
     return fetchWithConfig('/re_assert', 'POST', verification );
 }
 
-export async function initialize(): Promise<void> {
-    const response = await fetchWithConfig('/initialize', 'GET');
-    if (!response.ok) {
-        throw new Error('Failed to initialize');
-    }
+export async function initialize(): Promise<TreeState> {
+    
+    return fetchWithConfig('/initialize', 'GET');
+    // if (!response.ok) {
+    //     throw new Error('Failed to initialize');
+    // }
 }

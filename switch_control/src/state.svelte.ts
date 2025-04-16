@@ -1,6 +1,7 @@
 import type { TreeState, SwitchState } from "./types";
 import { reset, flipSwitch, reAssert, requestChannel } from "./api";
 import type { Verification } from "./types";
+import { initialize } from "./api";
 
 class Tree {
 
@@ -18,6 +19,13 @@ class Tree {
   button_colors = $state([false, false, false, false, false, false, false, false]);
 
   constructor() {
+  }
+
+  init() {
+    initialize().then((ss: TreeState) => {
+      this.st = ss;
+      this.updateButtons();
+    });
   }
 
   resetTree(verification: Verification) {
