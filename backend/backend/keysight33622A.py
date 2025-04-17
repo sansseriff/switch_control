@@ -1,5 +1,5 @@
 import os, time, traceback
-from snspd_measure.inst.visaInst import visaInst
+from visaInst import visaInst
 
 class keysight33622A(visaInst):
     """
