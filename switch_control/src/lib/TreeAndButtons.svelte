@@ -165,13 +165,13 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-width: 7rem;
+    /* min-width: 7rem; */
   }
 
   .container {
     display: flex;
     /* flex-direction: row; */
-    
+
     margin: auto;
     height: 315px;
   }

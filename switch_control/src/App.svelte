@@ -21,11 +21,11 @@
   onMount(async () => {
     // await new Promise((resolve) => setTimeout(resolve, 1));
     await tree.init();
-    // even though I don't use the ouptut of tree.init(), its important that 
-    // that it returns a promise. Because awaiting that promise delays the 
+    // even though I don't use the ouptut of tree.init(), its important that
+    // that it returns a promise. Because awaiting that promise delays the
     // setting of isLoading to false. If isLoading is set to false too soon,
-    // then the onMount function in contained components will trigger 
-    // api calls to get_tree before the tree is initialized. Causing an error. 
+    // then the onMount function in contained components will trigger
+    // api calls to get_tree before the tree is initialized. Causing an error.
     isLoading = false;
   });
 </script>
@@ -90,20 +90,24 @@
     /* margin-left: 2rem; */
     margin-right: 1rem;
     border: 1px solid rgb(237, 237, 237);
+
+    flex: 5;
   }
 
   .right {
     display: flex;
-    /* flex-direction: column;
+    /* flex-direction: column; */
     justify-content: center;
-    align-items: center; */
+    align-items: center;
     /* padding-top: 0.1rem; */
     border-radius: 8px;
-    padding-left: 3.7rem;
+    /* padding-left: 3.7rem; */
     padding-top: 1rem;
     padding-bottom: 1rem;
     border: 1px solid rgb(237, 237, 237);
     background-color: white;
+
+    flex: 10;
   }
 
   .inside {
@@ -113,5 +117,26 @@
     align-items: center;
     width: 100%;
     margin: auto;
+  }
+
+  /* Media query for smaller screens */
+  @media (max-width: 768px) {
+    main {
+      flex-direction: column;
+      height: auto;
+    }
+
+    .left {
+      flex-direction: row;
+      margin-right: 0;
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      gap: 1rem;
+    }
+
+    .right {
+      padding-left: 1rem;
+      width: auto;
+    }
   }
 </style>

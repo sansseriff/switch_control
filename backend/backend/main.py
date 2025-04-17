@@ -235,7 +235,8 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
         "Switch Control", url=url_to_load, resizable=True, width=800, height=412
     )
     win.events.closed += on_closed
-    webview.start(storage_path=tempfile.mkdtemp(), debug=None)
+    print("debug is: ", debug)
+    webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
     win.evaluate_js("window.special = 3")
     # print(f"Active GUI backend: {webview._webview.gui.__name__}")
 
@@ -333,8 +334,6 @@ def re_assert_tree(verification: Verification):
     app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
 
     return app.state.v.tree.tree_state
-
-
 
 
 def update_color():
@@ -461,11 +460,10 @@ def request_channel(channel: Channel):
 def get_tree():
     # this will error if the tree is not initialized
 
-    try: 
+    try:
         return app.state.v.tree.tree_state
     except:
         print("/tree endpoint called before initialization")
-        
 
 
 @app.get("/initialize")
@@ -487,7 +485,7 @@ async def initialize():
         # after the above two lines, this call should work
         tree_state = app.state.v.tree.tree_state
         return tree_state
-                
+
     except Exception as e:
         print(f"Initialization failed: {e}")
         raise HTTPException(status_code=500, detail="Initialization failed")
@@ -537,16 +535,17 @@ async def cleanup():
 
 def parse_arguments():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Switch Control Backend')
-    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
+    parser = argparse.ArgumentParser(description="Switch Control Backend")
+    parser.add_argument("--debug", action="store_true", help="Run in debug mode")
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = parse_arguments()
     log_level = "debug" if args.debug else None
-    
+
     server_ip = "0.0.0.0"
-    webview_ip = "0.0.0.0"
+    webview_ip = "localhost"
     server_port = 8000
     conn_recv, conn_send = multiprocessing.Pipe()
     # init_event = multiprocessing.Event()  # Create an Event object
@@ -566,13 +565,12 @@ if __name__ == "__main__":
 
     # Then start window
 
-
     windowsp = multiprocessing.Process(
-        target=start_window, args=(conn_send, f"http://{webview_ip}:{server_port}/", args.debug)
+        target=start_window,
+        args=(conn_send, f"http://{webview_ip}:{server_port}/", args.debug),
     )
-    
+
     windowsp.start()
-    
 
     window_status = ""
     while "closed" not in window_status:
