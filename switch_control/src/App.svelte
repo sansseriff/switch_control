@@ -31,34 +31,56 @@
 </script>
 
 <main>
-  <!-- <div class="bg-red-100">Is tailwind working?</div> -->
+  <div class="top-bar pywebview-drag-region"></div>
 
-  {#if isLoading}
-    <div class="loading-screen">
-      <p>Loading...</p>
-    </div>
-  {:else}
-    <div class="left">
-      <ProtectedButton
-        onVerifiedClick={(v) => tree.reAssertTree(v)}
-        width_rem={5.5}
-      >
-        ReAssert
-      </ProtectedButton>
-      <ProtectedButton
-        onVerifiedClick={(v) => tree.resetTree(v)}
-        width_rem={5.5}
-      >
-        Reset
-      </ProtectedButton>
-    </div>
-    <div class="right">
-      <div class="inside"><TreeAndButtons></TreeAndButtons></div>
-    </div>
-  {/if}
+  <div class="main-content">
+    <!-- <div class="bg-red-100">Is tailwind working?</div> -->
+    {#if isLoading}
+      <div class="loading-screen">
+        <p>Loading...</p>
+      </div>
+    {:else}
+      <div class="left">
+        <ProtectedButton
+          onVerifiedClick={(v) => tree.reAssertTree(v)}
+          width_rem={5.5}
+        >
+          ReAssert
+        </ProtectedButton>
+        <ProtectedButton
+          onVerifiedClick={(v) => tree.resetTree(v)}
+          width_rem={5.5}
+        >
+          Reset
+        </ProtectedButton>
+      </div>
+      <div class="right">
+        <div class="inside"><TreeAndButtons></TreeAndButtons></div>
+      </div>
+    {/if}
+  </div>
 </main>
 
 <style>
+  main {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+  }
+
+  .top-bar {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2.7rem;
+    /* margin-bottom: 1rem; */
+    background-color: #ffffff;
+    border-bottom: 1px solid rgb(237, 237, 237);
+  }
+
   .loading-screen {
     display: flex;
     justify-content: center;
@@ -66,14 +88,13 @@
     height: 100vh;
   }
 
-  main {
+  .main-content {
     display: flex;
     flex-direction: row;
     padding: 0;
     margin: 0;
-
     margin: 1rem;
-    height: calc(100vh - 2rem);
+    /* height: calc(100vh - 2rem); */
   }
 
   .left {

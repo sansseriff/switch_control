@@ -32,10 +32,15 @@ from multiprocessing.synchronize import Event as EventType
 import requests
 import argparse  # Add this import
 
+import AppKit
+
 # import Event type from multiprocessing
 
 
 # from location import THISS
+
+
+pulse_mode = True
 
 
 # print("THISS: ", THISS)
@@ -227,13 +232,30 @@ REMEMBER_STATE: bool = False
 # OSX: ls /dev/*usb*
 
 
+def add_buttons(window: webview.Window):
+    window.native.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(False)
+    window.native.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(
+        False
+    )
+    window.native.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(False)
+
+
 def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
     def on_closed():
         pipe_send.send("closed")
 
     win = webview.create_window(
-        "Switch Control", url=url_to_load, resizable=True, width=800, height=412
+        "Switch Control",
+        url=url_to_load,
+        resizable=True,
+        width=800,
+        height=412,
+        frameless=True,
+        easy_drag=False,
     )
+
+    # https://github.com/r0x0r/pywebview/issues/1496#issuecomment-2410471185
+    win.events.before_load += add_buttons
     win.events.closed += on_closed
     print("debug is: ", debug)
     webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
