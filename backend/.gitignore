@@ -9,3 +9,5 @@ switch_control/.vscode/
 .vscode/
 
 backend/switch_web
+
+database.db
