@@ -31,7 +31,8 @@
 </script>
 
 <main>
-  <div class="top-bar pywebview-drag-region"></div>
+  <!-- <div class="top-bar pywebview-drag-region"></div>
+  <div class="top-bar pywebview-drag-region"></div> -->
 
   <div class="main-content">
     <!-- <div class="bg-red-100">Is tailwind working?</div> -->
@@ -66,20 +67,19 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: 100vh;
+    height: 100%;
     margin: 0;
     padding: 0;
   }
 
-  .top-bar {
+  /* .top-bar {
     top: 0;
     left: 0;
     width: 100%;
     height: 2.7rem;
-    /* margin-bottom: 1rem; */
     background-color: #ffffff;
     border-bottom: 1px solid rgb(237, 237, 237);
-  }
+  } */
 
   .loading-screen {
     display: flex;
@@ -92,26 +92,23 @@
     display: flex;
     flex-direction: row;
     padding: 0;
-    margin: 0;
-    margin: 1rem;
-    /* height: calc(100vh - 2rem); */
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
   }
 
   .left {
-    /* width: 50%; */
     background-color: white;
     border-radius: 8px;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+    box-sizing: border-box;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
     justify-content: space-around;
     align-items: center;
-    width: 100%;
-    /* margin-left: 2rem; */
-    margin-right: 1rem;
+    margin: 1rem;
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
     border: 1px solid rgb(237, 237, 237);
-
     flex: 5;
   }
 
@@ -123,8 +120,10 @@
     /* padding-top: 0.1rem; */
     border-radius: 8px;
     /* padding-left: 3.7rem; */
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+    padding: 1rem;
+    margin: 1rem;
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
     border: 1px solid rgb(237, 237, 237);
     background-color: white;
 
@@ -142,22 +141,25 @@
 
   /* Media query for smaller screens */
   @media (max-width: 768px) {
-    main {
+    .main-content {
       flex-direction: column;
       height: auto;
     }
 
     .left {
       flex-direction: row;
-      margin-right: 0;
-      margin-bottom: 1rem;
+      margin-bottom: 0.5rem;
       padding: 0.5rem;
       gap: 1rem;
+      padding-top: 2rem;
+      padding-bottom: 2rem;
     }
 
     .right {
-      padding-left: 1rem;
+      margin-top: 0.5rem;
       width: auto;
+      padding-top: 2rem;
+      padding-bottom: 2rem;
     }
   }
 </style>

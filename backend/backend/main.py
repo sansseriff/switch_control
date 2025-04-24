@@ -27,15 +27,27 @@ from fastapi import HTTPException
 from multiprocessing import Manager, Event
 
 # import SyncManager type
-from multiprocessing.managers import SyncManager
-from multiprocessing.synchronize import Event as EventType
+# from multiprocessing.managers import SyncManager
+# from multiprocessing.synchronize import Event as EventType
 import requests
-import argparse  # Add this import
+import argparse
 
 import AppKit
 
-from pulse_controller import PulseController
+from pulse_controller import (
+    PulseController,
+    SimpleRelayPulseController,
+    FunctionGeneratorPulseController,
+)
 from node import Node, MaybeNode
+from models import (
+    ButtonLabelsBase,
+    Channel,
+    ToggleRequest,
+    SwitchState,
+    Tree,
+    T,
+)
 
 
 # print("THISS: ", THISS)
@@ -47,71 +59,16 @@ from sqlmodel import Session, select
 from db import (
     get_session,
     create_db_and_tables,
-    ButtonLabels as DBButtonLabels,  # Rename import for clarity
-    ButtonLabelsBase,  # Import the new base model
+    ButtonLabels,
+    InitResponse,
+    InitResponsePublic,
+    ButtonLabelsPublic,
 )
 
-pulse_mode = True
+FUNCTION_GEN = True
 
 # Define the annotated dependency
 DBSession = Annotated[Session, Depends(get_session)]
-
-
-class Channel(BaseModel):
-    number: int
-    verification: Verification
-
-
-class ToggleRequest(BaseModel):
-    number: int
-    verification: Verification
-
-
-class SwitchState(BaseModel):
-    pos: bool
-    color: bool
-
-
-class Tree(BaseModel):
-    R1: SwitchState
-    R2: SwitchState
-    R3: SwitchState
-    R4: SwitchState
-    R5: SwitchState
-    R6: SwitchState
-    R7: SwitchState
-    activated_channel: int
-
-
-class T(BaseModel):
-    tree_state: Tree
-    activated_channel: int
-
-
-# Pydantic model for updating labels (can reuse ButtonLabelsBase)
-# class ButtonLabelsUpdate(BaseModel): ... (Remove this or alias ButtonLabelsBase)
-ButtonLabelsUpdate = ButtonLabelsBase  # Alias for clarity if preferred
-
-
-# Pydantic model for public responses (inherits from base, excludes id implicitly)
-class ButtonLabelsPublic(ButtonLabelsBase):
-    pass
-
-
-# Pydantic model for the response of the /initialize endpoint
-class InitializationResponse(BaseModel):
-    tree_state: Tree
-    button_labels: ButtonLabelsPublic  # Use the public model
-
-
-class InitResponse(BaseModel):
-    tree_state: Tree
-    button_labels: DBButtonLabels
-
-
-class InitResponsePublic(BaseModel):
-    tree_state: Tree
-    button_labels: ButtonLabelsPublic  # Use the public model
 
 
 class CryoRelayManager:
@@ -119,9 +76,14 @@ class CryoRelayManager:
     Manages the cryogenic teledyne relays and their state.
     """
 
-    def __init__(self):
+    def __init__(self, function_gen: bool = True):
         # Initialize switch
-        self.pulse_controller = PulseController()
+
+        if function_gen:
+            self.pulse_controller: PulseController = FunctionGeneratorPulseController()
+        else:
+            self.pulse_controller: PulseController = SimpleRelayPulseController()
+
         # Initialize nodes
         self.nodes = [Node(f"R{i}") for i in range(1, 8)]
         self.R1, self.R2, self.R3, self.R4, self.R5, self.R6, self.R7 = self.nodes
@@ -185,15 +147,14 @@ async def lifespan(app: FastAPI):
 # Pass the lifespan manager to the FastAPI app
 app = FastAPI(lifespan=lifespan)
 
-# app.state = State({"v": StateManager()})
 
 # Add CORS middleware with permissive settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -209,7 +170,7 @@ mimetypes.init()
 PULSE_TIME = 50
 SLEEP_TIME = 0.050
 REMEMBER_STATE: bool = False
-FRAMELESS: bool = True
+FRAMELESS: bool = False
 
 
 # https://numato.com/docs/8-channel-usb-relay-module/
@@ -217,11 +178,11 @@ FRAMELESS: bool = True
 
 
 def add_buttons(window: webview.Window):
-    window.native.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(False)
-    window.native.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(
+    window.native.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(False)  # type: ignore
+    window.native.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(  # type: ignore
         False
     )
-    window.native.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(False)
+    window.native.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(False)  # type: ignore
 
 
 def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
@@ -274,7 +235,7 @@ async def return_index(request: Request):
 
 
 def flatten_tree(root: MaybeNode) -> Tree:
-    state = {}
+    state: dict[str, SwitchState | int] = {}
     state["activated_channel"] = T.activated_channel
     queue = [root]
 
@@ -321,20 +282,9 @@ def re_assert_tree(verification: Verification):
         idx = int(current_node.relay_index)
         if current_node.polarity is True:
             v.pulse_controller.flip_right(idx, verification)
-            # app.state.v.switch.turn_off(0, verification)
-            # time.sleep(SLEEP_TIME)
-            # app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
-
         else:
             v.pulse_controller.flip_left(idx, verification)
-            # app.state.v.switch.turn_on(0, verification)
-            # time.sleep(SLEEP_TIME)
-            # app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
-            # time.sleep(SLEEP_TIME)
-            # app.state.v.switch.turn_off(0, verification)
-        # time.sleep(SLEEP_TIME)
         current_node = current_node.to_next()
-
         if type(current_node) is int:
             break
 
@@ -369,16 +319,12 @@ def channel_to_state(
     """
     take in user-numbering channel (1-8)
     """
-
     v: CryoRelayManager = app.state.v
-
     if channel < 0 or channel > 7:
         print("Invalid channel number, stopping.")
         return
-
     # flip the channel numbering
     channel = 7 - channel
-
     # switch from user to relay channel numbering
     # channel -= 1
     binary = bin(channel)[2:]
@@ -388,50 +334,25 @@ def channel_to_state(
 
     for bit in enumerate(binary):
         print(bit[1])
-
         if type(current_node) is not Node:
             print("Reached a None or end node, stopping.")
             return
-
         time.sleep(SLEEP_TIME)
-
         if bit[1] == "0":
-            # want cryo-relay to point left
-
             if (not current_node.polarity) or (not REMEMBER_STATE):
-                # flip the relay
                 current_node.polarity = True
-
                 idx = int(current_node.relay_index)
-
+                print(f"flip cryo relay {current_node.relay_index} left")
                 v.pulse_controller.flip_left(idx, verification)
-                # app.state.v.switch.turn_off(0, verification)
-                # time.sleep(SLEEP_TIME)
-                # app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
-                # time.sleep(SLEEP_TIME)
-
         else:
             if (current_node.polarity) or (not REMEMBER_STATE):
-                # flip the relay
+                print(f"flip cryo relay {current_node.relay_index} right")
                 current_node.polarity = False
-
                 idx = int(current_node.relay_index)
-
                 v.pulse_controller.flip_right(idx, verification)
-                # app.state.v.switch.turn_on(0, verification)
-                # time.sleep(SLEEP_TIME)
-                # app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
-                # time.sleep(SLEEP_TIME)
-                # app.state.v.switch.turn_off(0, verification)
-                # time.sleep(SLEEP_TIME)
-
         current_node = current_node.to_next()
-
-    # print("BEFORE: ", "R1:", tree.tree_app.state.v.R1.color, "  R2:", tree.tree_app.state.v.R2.color, "  R3: ", tree.tree_app.state.v.R3.color, "  R4:", tree.tree_app.state.v.R4.color, "  R5:", tree.tree_app.state.v.R5.color, "  R6:", tree.tree_app.state.v.R6.color, "  R7:", tree.tree_app.state.v.R7.color)
     update_color()
-    # print("After: ", "R1:", tree.tree_app.state.v.R1.color, "  R2:", tree.tree_app.state.v.R2.color, "  R3: ", tree.tree_app.state.v.R3.color, "  R4:", tree.tree_app.state.v.R4.color, "  R5:", tree.tree_app.state.v.R5.color, "  R6:", tree.tree_app.state.v.R6.color, "  R7:", tree.tree_app.state.v.R7.color)
     app.state.v.tree.tree_state = flatten_tree(v.top_node)
-
     return v.tree.tree_state
 
 
@@ -462,7 +383,7 @@ def re_assert(verification: Verification):
 
 @app.post("/channel")
 def request_channel(channel: Channel):
-    print("channel number: ", channel.number)
+    print("cryo-channel requested: ", channel.number)
     return channel_to_state(channel.number, channel.verification)
 
 
@@ -482,7 +403,7 @@ async def initialize(session: DBSession):  # Use DBSession
     Initializes the application state, including the tree state and button labels.
     """
     tree_state: Tree | None = None
-    labels: DBButtonLabels | None = None  # Expecting the DB model
+    labels: ButtonLabels | None = None  # Expecting the DB model
 
     try:
         # Check if CryoRelayManager is already initialized in app state
@@ -490,12 +411,12 @@ async def initialize(session: DBSession):  # Use DBSession
             tree_state = app.state.v.tree.tree_state
         else:
             # Initialize CryoRelayManager if not already done
-            manager = await asyncio.to_thread(CryoRelayManager)
+            manager = await asyncio.to_thread(CryoRelayManager, FUNCTION_GEN)
             app.state = State({"v": manager})
             tree_state = app.state.v.tree.tree_state
 
         # Fetch button labels from the database
-        statement = select(DBButtonLabels).where(DBButtonLabels.id == 1)
+        statement = select(ButtonLabels).where(ButtonLabels.id == 1)
         results = session.exec(statement)
         labels = results.one_or_none()
 
@@ -524,7 +445,7 @@ async def initialize(session: DBSession):  # Use DBSession
 
 @app.get("/button_labels", response_model=ButtonLabelsPublic)
 def get_button_labels(session: DBSession):
-    statement = select(DBButtonLabels).where(DBButtonLabels.id == 1)
+    statement = select(ButtonLabels).where(ButtonLabels.id == 1)
     results = session.exec(statement)
     db_labels = results.one_or_none()
     if not db_labels:
@@ -538,14 +459,14 @@ def update_button_labels(
     labels: ButtonLabelsBase,
     session: DBSession,  # Use base model for input
 ):
-    statement = select(DBButtonLabels).where(DBButtonLabels.id == 1)
+    statement = select(ButtonLabels).where(ButtonLabels.id == 1)
     results = session.exec(statement)
     db_labels = results.one_or_none()
 
     if not db_labels:
         print("Button labels row not found, creating one.")
         # Create DB model instance from the input base model
-        db_labels = DBButtonLabels(id=1, **labels.model_dump())
+        db_labels = ButtonLabels(id=1, **labels.model_dump())
     else:
         # Update existing labels using data from the input base model
         for key, value in labels.model_dump().items():
@@ -569,30 +490,17 @@ def toggle_switch(toggle: ToggleRequest):
     v: CryoRelayManager = app.state.v
 
     sw = v.nodes[toggle.number - 1]
-    print("the switch to toggle: ", sw.relay_name)
+    # print("the switch to toggle: ", sw.relay_name)
 
     if not sw.polarity:
-        # flip the relay
         sw.polarity = True
-
         idx = int(sw.relay_index)
-
         v.pulse_controller.flip_left(idx, toggle.verification)
-        # app.state.v.switch.turn_off(0, toggle.verification)
-        # time.sleep(SLEEP_TIME)
-        # app.state.v.switch.send_pulse(idx, PULSE_TIME, toggle.verification)
 
     else:
-        # flip the relay
         sw.polarity = False
-
         idx = int(sw.relay_index)
         v.pulse_controller.flip_right(idx, toggle.verification)
-        # app.state.v.switch.turn_on(0, toggle.verification)
-        # time.sleep(SLEEP_TIME)
-        # app.state.v.switch.send_pulse(idx, PULSE_TIME, toggle.verification)
-        # time.sleep(SLEEP_TIME)
-        # app.state.v.switch.turn_off(0, toggle.verification)
 
     update_color()
     app.state.v.tree.tree_state = flatten_tree(v.top_node)

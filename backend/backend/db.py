@@ -2,21 +2,10 @@ from typing import Annotated, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from pydantic import (
-    BaseModel as PydanticBaseModel,
-)  # Import Pydantic's BaseModel for the base class
-
+from pydantic import BaseModel
+from models import ButtonLabelsBase, Tree
 
 # Define a base Pydantic model for the labels (used for request/response structure)
-class ButtonLabelsBase(PydanticBaseModel):
-    label_0: str = "Ch 1"
-    label_1: str = "Ch 2"
-    label_2: str = "Ch 3"
-    label_3: str = "Ch 4"
-    label_4: str = "Ch 5"
-    label_5: str = "Ch 6"
-    label_6: str = "Ch 7"
-    label_7: str = "Ch 8"
 
 
 # Define the SQLModel for the database, inheriting from the base and adding the ID
@@ -24,6 +13,27 @@ class ButtonLabels(SQLModel, ButtonLabelsBase, table=True):
     id: Optional[int] = Field(
         default=1, primary_key=True
     )  # Use a fixed ID for the single row
+
+
+# Pydantic model for public responses (inherits from base, excludes id implicitly)
+class ButtonLabelsPublic(ButtonLabelsBase):
+    pass
+
+
+# Pydantic model for the response of the /initialize endpoint
+class InitializationResponse(BaseModel):
+    tree_state: Tree
+    button_labels: ButtonLabelsPublic
+
+
+class InitResponse(BaseModel):
+    tree_state: Tree
+    button_labels: ButtonLabels
+
+
+class InitResponsePublic(BaseModel):
+    tree_state: Tree
+    button_labels: ButtonLabelsPublic
 
 
 sqlite_file_name = "database.db"
