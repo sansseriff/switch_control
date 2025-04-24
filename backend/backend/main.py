@@ -1,5 +1,3 @@
-import subprocess
-
 from fastapi import FastAPI, Request
 import asyncio
 
@@ -15,7 +13,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi import Depends
-from numatoRelay import Relay
+
 import time
 import webview
 import tempfile
@@ -33,6 +31,8 @@ import requests
 import argparse  # Add this import
 
 import AppKit
+
+from pulse_controller import PulseController  # Import the PulseController class
 
 # import Event type from multiprocessing
 
@@ -113,28 +113,14 @@ MaybeNode = Node | int | None
 # cleanup_event = Event()
 
 
-# Scan the system for serial ports
-def get_serial_ports():
-    ports: list[str | None] = []
-    commands = ["ls /dev/ttyUSB*", "ls /dev/ttyACM*", "ls /dev/*usb*"]
+class CryoRelayManager:
+    """
+    Manages the cryogenic teledyne relays and their state.
+    """
 
-    for cmd in commands:
-        try:
-            output = subprocess.check_output(cmd, shell=True, text=True)
-            ports.extend(output.strip().split("\n"))
-        except subprocess.CalledProcessError:
-            # Ignore the error if no devices are found for the current pattern
-            continue
-
-    print("these are the ports: ", ports)
-
-    return ports
-
-
-class StateManager:
     def __init__(self):
         # Initialize switch
-        self.switch = self.initialize_relay()
+        self.pulse_controller = PulseController()
         # Initialize nodes
         self.nodes = [Node(f"R{i}") for i in range(1, 8)]
         self.R1, self.R2, self.R3, self.R4, self.R5, self.R6, self.R7 = self.nodes
@@ -179,26 +165,8 @@ class StateManager:
         )
         self.tree = T(tree_state=self.tree_state, activated_channel=0)
 
-    def initialize_relay(self):
-        serial_ports = get_serial_ports()
-        if serial_ports:
-            for port in serial_ports:
-                try:
-                    switch = Relay(port)
-                    print("Relay initialized successfully")
-
-                    return switch
-                except Exception as error:
-                    print(f"Failed to initialize relay: {error}")
-                    debug_switch = Relay(None)
-        else:
-            print("No serial ports found, using debug mode")
-            debug_switch = Relay(None)
-        return debug_switch
-
     def cleanup(self):
-        if self.switch and self.switch.serial:
-            self.switch.close()
+        self.pulse_controller.cleanup()
 
 
 app = FastAPI()
@@ -217,7 +185,7 @@ app.add_middleware(
 # Add dependency
 def get_state_manager():
     print("the manager: ", app.state.v)
-    print("something inside: ", app.state.v.switch)
+    print("something inside: ", app.state.v.pulse_controller)
     return app.state.v.v
 
 
@@ -226,6 +194,7 @@ mimetypes.init()
 PULSE_TIME = 50
 SLEEP_TIME = 0.050
 REMEMBER_STATE: bool = False
+FRAMELESS: bool = True
 
 
 # https://numato.com/docs/8-channel-usb-relay-module/
@@ -250,12 +219,14 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
         resizable=True,
         width=800,
         height=412,
-        frameless=True,
+        frameless=FRAMELESS,
         easy_drag=False,
     )
 
     # https://github.com/r0x0r/pywebview/issues/1496#issuecomment-2410471185
-    win.events.before_load += add_buttons
+
+    if FRAMELESS:
+        win.events.before_load += add_buttons
     win.events.closed += on_closed
     print("debug is: ", debug)
     webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
@@ -287,11 +258,6 @@ async def return_index(request: Request):
     return FileResponse(Path(WEB_DIR, "index.html"))
 
 
-@app.get("/")
-def hello():
-    return "Hello, World!"
-
-
 def flatten_tree(root: MaybeNode) -> Tree:
     state = {}
     state["activated_channel"] = T.activated_channel
@@ -314,46 +280,51 @@ def flatten_tree(root: MaybeNode) -> Tree:
 
 
 def init_tree(verification: Verification):
-    app.state.v.switch.turn_on(0, verification)
+    v: CryoRelayManager = app.state.v
 
-    for node in app.state.v.nodes:
-        time.sleep(SLEEP_TIME)
+    # v.pulse_controller.turn_on(0, verification)
+
+    for node in v.nodes:
+        # time.sleep(SLEEP_TIME)
         node.polarity = False
         idx = int(node.relay_index)
-        app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
+        v.pulse_controller.flip_right(idx, verification)
 
-    app.state.v.switch.turn_off(0, verification)
+    # app.state.v.switch.turn_off(0, verification)
 
     update_color()
-    app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
+    app.state.v.tree.tree_state = flatten_tree(v.top_node)
 
-    return app.state.v.tree.tree_state
+    return v.tree.tree_state
 
 
 def re_assert_tree(verification: Verification):
-    current_node = app.state.v.top_node
+    v: CryoRelayManager = app.state.v
+    current_node = v.top_node
 
     while type(current_node) is Node:
         idx = int(current_node.relay_index)
         if current_node.polarity is True:
-            app.state.v.switch.turn_off(0, verification)
-            time.sleep(SLEEP_TIME)
-            app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
+            v.pulse_controller.flip_right(idx, verification)
+            # app.state.v.switch.turn_off(0, verification)
+            # time.sleep(SLEEP_TIME)
+            # app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
 
         else:
-            app.state.v.switch.turn_on(0, verification)
-            time.sleep(SLEEP_TIME)
-            app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
-            time.sleep(SLEEP_TIME)
-            app.state.v.switch.turn_off(0, verification)
-        time.sleep(SLEEP_TIME)
+            v.pulse_controller.flip_left(idx, verification)
+            # app.state.v.switch.turn_on(0, verification)
+            # time.sleep(SLEEP_TIME)
+            # app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
+            # time.sleep(SLEEP_TIME)
+            # app.state.v.switch.turn_off(0, verification)
+        # time.sleep(SLEEP_TIME)
         current_node = current_node.to_next()
 
         if type(current_node) is int:
             break
 
     update_color()
-    app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
+    app.state.v.tree.tree_state = flatten_tree(v.top_node)
 
     return app.state.v.tree.tree_state
 
@@ -384,6 +355,8 @@ def channel_to_state(
     take in user-numbering channel (1-8)
     """
 
+    v: CryoRelayManager = app.state.v
+
     if channel < 0 or channel > 7:
         print("Invalid channel number, stopping.")
         return
@@ -406,21 +379,21 @@ def channel_to_state(
             return
 
         time.sleep(SLEEP_TIME)
-        if bit[1] == "0":
-            # current_node = current_node.left
 
-            if not current_node.polarity or (not REMEMBER_STATE):
+        if bit[1] == "0":
+            # want cryo-relay to point left
+
+            if (not current_node.polarity) or (not REMEMBER_STATE):
                 # flip the relay
                 current_node.polarity = True
 
                 idx = int(current_node.relay_index)
-                app.state.v.switch.turn_off(0, verification)
 
-                time.sleep(SLEEP_TIME)
-
-                app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
-
-                time.sleep(SLEEP_TIME)
+                v.pulse_controller.flip_left(idx, verification)
+                # app.state.v.switch.turn_off(0, verification)
+                # time.sleep(SLEEP_TIME)
+                # app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
+                # time.sleep(SLEEP_TIME)
 
         else:
             if (current_node.polarity) or (not REMEMBER_STATE):
@@ -428,23 +401,23 @@ def channel_to_state(
                 current_node.polarity = False
 
                 idx = int(current_node.relay_index)
-                app.state.v.switch.turn_on(0, verification)
-                time.sleep(SLEEP_TIME)
 
-                app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
-
-                time.sleep(SLEEP_TIME)
-                app.state.v.switch.turn_off(0, verification)
-                time.sleep(SLEEP_TIME)
+                v.pulse_controller.flip_right(idx, verification)
+                # app.state.v.switch.turn_on(0, verification)
+                # time.sleep(SLEEP_TIME)
+                # app.state.v.switch.send_pulse(idx, PULSE_TIME, verification)
+                # time.sleep(SLEEP_TIME)
+                # app.state.v.switch.turn_off(0, verification)
+                # time.sleep(SLEEP_TIME)
 
         current_node = current_node.to_next()
 
     # print("BEFORE: ", "R1:", tree.tree_app.state.v.R1.color, "  R2:", tree.tree_app.state.v.R2.color, "  R3: ", tree.tree_app.state.v.R3.color, "  R4:", tree.tree_app.state.v.R4.color, "  R5:", tree.tree_app.state.v.R5.color, "  R6:", tree.tree_app.state.v.R6.color, "  R7:", tree.tree_app.state.v.R7.color)
     update_color()
     # print("After: ", "R1:", tree.tree_app.state.v.R1.color, "  R2:", tree.tree_app.state.v.R2.color, "  R3: ", tree.tree_app.state.v.R3.color, "  R4:", tree.tree_app.state.v.R4.color, "  R5:", tree.tree_app.state.v.R5.color, "  R6:", tree.tree_app.state.v.R6.color, "  R7:", tree.tree_app.state.v.R7.color)
-    app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
+    app.state.v.tree.tree_state = flatten_tree(v.top_node)
 
-    return app.state.v.tree.tree_state
+    return v.tree.tree_state
 
 
 @app.exception_handler(RequestValidationError)
@@ -481,17 +454,30 @@ def request_channel(channel: Channel):
 @app.get("/tree")
 def get_tree():
     # this will error if the tree is not initialized
-
+    v: CryoRelayManager = app.state.v
     try:
-        return app.state.v.tree.tree_state
+        return v.tree.tree_state
     except:
         print("/tree endpoint called before initialization")
 
 
 @app.get("/initialize")
 async def initialize():
+    """
+    In a simple FastAPI app that runs in the main thread, you'd be able to access data in the
+    global namespace. CryoRelayManager could just be initialized at the top of the file
+    and used in any function as a global variable. But since pywebview must run in the main
+    process and fastapi runs in a separate process, accessing state like CryoRelayManager is
+    more complicated. Starlette (on which fastapi is built) provides a way to store state
+    in the app object, which is a dictionary-like object that can be used to store data
+    that needs to be shared across requests. This is what we do here.
+
+    Todo: check out FastAPI Dependencies, for use instead of app.state
+    """
     val = False
+
     try:
+        # v: CryoRelayManager =
         val = app.state.v.tree.tree_state
     except AttributeError:
         print("tree state not initialized")
@@ -501,7 +487,7 @@ async def initialize():
         return app.state.v.tree.tree_state
 
     try:
-        manager = await asyncio.to_thread(StateManager)
+        manager = await asyncio.to_thread(CryoRelayManager)
         app.state = State({"v": manager})
 
         # after the above two lines, this call should work
@@ -515,7 +501,9 @@ async def initialize():
 
 @app.post("/switch")
 def toggle_switch(toggle: ToggleRequest):
-    sw = app.state.v.nodes[toggle.number - 1]
+    v: CryoRelayManager = app.state.v
+
+    sw = v.nodes[toggle.number - 1]
     print("the switch to toggle: ", sw.relay_name)
 
     if not sw.polarity:
@@ -523,31 +511,35 @@ def toggle_switch(toggle: ToggleRequest):
         sw.polarity = True
 
         idx = int(sw.relay_index)
-        app.state.v.switch.turn_off(0, toggle.verification)
-        time.sleep(SLEEP_TIME)
-        app.state.v.switch.send_pulse(idx, PULSE_TIME, toggle.verification)
+
+        v.pulse_controller.flip_left(idx, toggle.verification)
+        # app.state.v.switch.turn_off(0, toggle.verification)
+        # time.sleep(SLEEP_TIME)
+        # app.state.v.switch.send_pulse(idx, PULSE_TIME, toggle.verification)
 
     else:
         # flip the relay
         sw.polarity = False
 
         idx = int(sw.relay_index)
-        app.state.v.switch.turn_on(0, toggle.verification)
-        time.sleep(SLEEP_TIME)
-        app.state.v.switch.send_pulse(idx, PULSE_TIME, toggle.verification)
-        time.sleep(SLEEP_TIME)
-        app.state.v.switch.turn_off(0, toggle.verification)
+        v.pulse_controller.flip_right(idx, toggle.verification)
+        # app.state.v.switch.turn_on(0, toggle.verification)
+        # time.sleep(SLEEP_TIME)
+        # app.state.v.switch.send_pulse(idx, PULSE_TIME, toggle.verification)
+        # time.sleep(SLEEP_TIME)
+        # app.state.v.switch.turn_off(0, toggle.verification)
 
     update_color()
-    app.state.v.tree.tree_state = flatten_tree(app.state.v.top_node)
-    return app.state.v.tree.tree_state
+    app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    return v.tree.tree_state
 
 
 @app.post("/cleanup")
 async def cleanup():
+    v: CryoRelayManager = app.state.v
     try:
-        if app.state and app.state.v:
-            app.state.v.cleanup()
+        if app.state and v:
+            v.cleanup()
             print("Cleanup done")
         return {"ok": True}
     except Exception as e:
@@ -568,7 +560,7 @@ if __name__ == "__main__":
 
     server_ip = "0.0.0.0"
     webview_ip = "localhost"
-    server_port = 8000
+    server_port = 8854  # use a more random port
     conn_recv, conn_send = multiprocessing.Pipe()
     # init_event = multiprocessing.Event()  # Create an Event object
 

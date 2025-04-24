@@ -5,7 +5,7 @@ import type { Verification } from "./types";
 
 function isPywebview() {
     return typeof window.QObject !== 'undefined';
-  }
+}
 
 
 
@@ -19,7 +19,7 @@ function fetchWithConfig(url: string, method: string, body?: any): Promise<any> 
     const isWebView = isPywebview();
     console.log("isWebView: ", isWebView);
 
-    const baseUrl = isWebView ? "http://localhost:8000" : "";
+    const baseUrl = isWebView ? "http://localhost:8854" : "";
 
     const config: RequestInit = {
         method,
@@ -71,15 +71,15 @@ export function getTreeState(): Promise<TreeState> {
 }
 
 export function reset(verification: Verification): Promise<TreeState> {
-    return fetchWithConfig('/reset', 'POST', verification );
+    return fetchWithConfig('/reset', 'POST', verification);
 }
 
 export function reAssert(verification: Verification): Promise<TreeState> {
-    return fetchWithConfig('/re_assert', 'POST', verification );
+    return fetchWithConfig('/re_assert', 'POST', verification);
 }
 
 export async function initialize(): Promise<TreeState> {
-    
+
     return fetchWithConfig('/initialize', 'GET');
     // if (!response.ok) {
     //     throw new Error('Failed to initialize');
