@@ -1,5 +1,5 @@
 import type Tree from "./lib/TreeDiagram.svelte";
-import type { TreeState } from "./types";
+import type { TreeState, ButtonLabelState } from "./types"; // Add ButtonLabelState
 import type { Verification } from "./types";
 
 
@@ -52,8 +52,23 @@ interface ToggleRequest {
     verification: Verification;
 }
 
+// Define the structure for the initialization response
+interface InitializationResponse {
+    tree_state: TreeState;
+    button_labels: ButtonLabelState;
+}
 
-
+// Define the structure for button labels payload/response
+interface ButtonLabelsPayload {
+    label_0: string;
+    label_1: string;
+    label_2: string;
+    label_3: string;
+    label_4: string;
+    label_5: string;
+    label_6: string;
+    label_7: string;
+}
 
 
 export function requestChannel(channel_request: ChannelRequest): Promise<TreeState> {
@@ -70,6 +85,17 @@ export function getTreeState(): Promise<TreeState> {
     return fetchWithConfig('/tree', 'GET');
 }
 
+// Add function to get button labels
+export function getButtonLabels(): Promise<ButtonLabelsPayload> {
+    return fetchWithConfig('/button_labels', 'GET');
+}
+
+// Add function to update button labels
+export function updateButtonLabels(labels: ButtonLabelsPayload): Promise<ButtonLabelsPayload> {
+    return fetchWithConfig('/button_labels', 'POST', labels);
+}
+
+
 export function reset(verification: Verification): Promise<TreeState> {
     return fetchWithConfig('/reset', 'POST', verification);
 }
@@ -78,8 +104,8 @@ export function reAssert(verification: Verification): Promise<TreeState> {
     return fetchWithConfig('/re_assert', 'POST', verification);
 }
 
-export async function initialize(): Promise<TreeState> {
-
+// Modify initialize to return the combined structure
+export async function initialize(): Promise<InitializationResponse> {
     return fetchWithConfig('/initialize', 'GET');
     // if (!response.ok) {
     //     throw new Error('Failed to initialize');

@@ -1,7 +1,8 @@
-import type { TreeState, SwitchState } from "./types";
-import { reset, flipSwitch, reAssert, requestChannel } from "./api";
+import type { TreeState, SwitchState, ButtonLabelState } from "./types"; // Import ButtonLabelState
+import { reset, flipSwitch, reAssert, requestChannel, updateButtonLabels } from "./api"; // Import updateButtonLabels
 import type { Verification } from "./types";
 import { initialize } from "./api";
+import type { InitializationResponse } from "./api"; // Import InitializationResponse
 
 class Tree {
 
@@ -16,16 +17,30 @@ class Tree {
     activated_channel: 0
   });
 
+  // Add state for button labels
+  button_labels: ButtonLabelState = $state({
+    label_0: "Ch 1",
+    label_1: "Ch 2",
+    label_2: "Ch 3",
+    label_3: "Ch 4",
+    label_4: "Ch 5",
+    label_5: "Ch 6",
+    label_6: "Ch 7",
+    label_7: "Ch 8",
+  });
+
   button_colors = $state([false, false, false, false, false, false, false, false]);
 
   constructor() {
   }
 
+  // Update init to handle the combined response
   init() {
-    return initialize().then((ss: TreeState) => {
-      this.st = ss;
+    return initialize().then((response: InitializationResponse) => {
+      this.st = response.tree_state;
+      this.button_labels = response.button_labels; // Store labels
       this.updateButtons();
-      return ss; // Optionally return the state if needed
+      return response; // Return the full response if needed
     });
   }
 
@@ -62,7 +77,12 @@ class Tree {
   updateButtons() {
     this.button_colors = this.button_colors.map((color) => false);
     // console.log(this.st.activated_channel)
-    this.button_colors[this.st.activated_channel] = true;
+    // Ensure activated_channel is within bounds before highlighting
+    if (this.st.activated_channel >= 0 && this.st.activated_channel < this.button_colors.length) {
+      this.button_colors[this.st.activated_channel] = true;
+    } else {
+      console.warn("Activated channel index out of bounds:", this.st.activated_channel);
+    }
     // console.log("after updating: ", this.st.activated_channel)
     // $state.snapshot(this.button_colors)
     // console.log(this.button_colors)
@@ -75,6 +95,17 @@ class Tree {
     }).then((ss: TreeState) => {
       this.st = ss;
       this.updateButtons();
+    });
+  }
+
+  // Add method to save button labels
+  saveButtonLabels(labels: ButtonLabelState) {
+    updateButtonLabels(labels).then((savedLabels: ButtonLabelState) => {
+      this.button_labels = savedLabels; // Update state with saved labels from response
+      console.log("Button labels saved successfully.");
+    }).catch(error => {
+      console.error("Failed to save button labels:", error);
+      // Optionally revert changes or show an error message to the user
     });
   }
 }

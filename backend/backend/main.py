@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Request
 import asyncio
+from typing import Annotated
+from contextlib import asynccontextmanager  # Import asynccontextmanager
 
 # from uvicorn import run
 import multiprocessing
@@ -32,21 +34,27 @@ import argparse  # Add this import
 
 import AppKit
 
-from pulse_controller import PulseController  # Import the PulseController class
-
-# import Event type from multiprocessing
-
-
-# from location import THISS
-
-
-pulse_mode = True
+from pulse_controller import PulseController
+from node import Node, MaybeNode
 
 
 # print("THISS: ", THISS)
 from location import WEB_DIR
 import mimetypes
 from uvicorn import Config, Server
+
+from sqlmodel import Session, select
+from db import (
+    get_session,
+    create_db_and_tables,
+    ButtonLabels as DBButtonLabels,  # Rename import for clarity
+    ButtonLabelsBase,  # Import the new base model
+)
+
+pulse_mode = True
+
+# Define the annotated dependency
+DBSession = Annotated[Session, Depends(get_session)]
 
 
 class Channel(BaseModel):
@@ -80,37 +88,30 @@ class T(BaseModel):
     activated_channel: int
 
 
-class Node:
-    def __init__(self, relay_name: str):
-        self.left: Node | None | int = None
-        self.right: Node | None | int = None
-
-        self.relay_name = relay_name
-        self.relay_index = int(relay_name[1])  # R1 -> 1
-        self.polarity = False  # False/0 is right, True/1 is left
-
-        self.in_use = False
-
-    def to_next(self):
-        # process to whichever switch is 'pointed to' by this switch
-        if self.polarity:
-            return self.left
-        else:
-            return self.right
+# Pydantic model for updating labels (can reuse ButtonLabelsBase)
+# class ButtonLabelsUpdate(BaseModel): ... (Remove this or alias ButtonLabelsBase)
+ButtonLabelsUpdate = ButtonLabelsBase  # Alias for clarity if preferred
 
 
-MaybeNode = Node | int | None
+# Pydantic model for public responses (inherits from base, excludes id implicitly)
+class ButtonLabelsPublic(ButtonLabelsBase):
+    pass
 
 
-# # Create a Manager instance
-# manager = Manager()
+# Pydantic model for the response of the /initialize endpoint
+class InitializationResponse(BaseModel):
+    tree_state: Tree
+    button_labels: ButtonLabelsPublic  # Use the public model
 
-# # Create a shared dictionary
-# shared_state = manager.dict()
+
+class InitResponse(BaseModel):
+    tree_state: Tree
+    button_labels: DBButtonLabels
 
 
-# Create an event for cleanup
-# cleanup_event = Event()
+class InitResponsePublic(BaseModel):
+    tree_state: Tree
+    button_labels: ButtonLabelsPublic  # Use the public model
 
 
 class CryoRelayManager:
@@ -169,7 +170,21 @@ class CryoRelayManager:
         self.pulse_controller.cleanup()
 
 
-app = FastAPI()
+# Define the lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Code to run on startup
+    print("Creating database and tables...")
+    create_db_and_tables()
+    print("Database and tables created.")
+    yield
+    # Code to run on shutdown (if any)
+    print("Application shutting down.")
+
+
+# Pass the lifespan manager to the FastAPI app
+app = FastAPI(lifespan=lifespan)
+
 # app.state = State({"v": StateManager()})
 
 # Add CORS middleware with permissive settings
@@ -461,42 +476,92 @@ def get_tree():
         print("/tree endpoint called before initialization")
 
 
-@app.get("/initialize")
-async def initialize():
+@app.get("/initialize", response_model=InitResponsePublic)
+async def initialize(session: DBSession):  # Use DBSession
     """
-    In a simple FastAPI app that runs in the main thread, you'd be able to access data in the
-    global namespace. CryoRelayManager could just be initialized at the top of the file
-    and used in any function as a global variable. But since pywebview must run in the main
-    process and fastapi runs in a separate process, accessing state like CryoRelayManager is
-    more complicated. Starlette (on which fastapi is built) provides a way to store state
-    in the app object, which is a dictionary-like object that can be used to store data
-    that needs to be shared across requests. This is what we do here.
-
-    Todo: check out FastAPI Dependencies, for use instead of app.state
+    Initializes the application state, including the tree state and button labels.
     """
-    val = False
+    tree_state: Tree | None = None
+    labels: DBButtonLabels | None = None  # Expecting the DB model
 
     try:
-        # v: CryoRelayManager =
-        val = app.state.v.tree.tree_state
-    except AttributeError:
-        print("tree state not initialized")
+        # Check if CryoRelayManager is already initialized in app state
+        if hasattr(app.state, "v") and app.state.v:
+            tree_state = app.state.v.tree.tree_state
+        else:
+            # Initialize CryoRelayManager if not already done
+            manager = await asyncio.to_thread(CryoRelayManager)
+            app.state = State({"v": manager})
+            tree_state = app.state.v.tree.tree_state
 
-    if val:
-        print("already initialized")
-        return app.state.v.tree.tree_state
+        # Fetch button labels from the database
+        statement = select(DBButtonLabels).where(DBButtonLabels.id == 1)
+        results = session.exec(statement)
+        labels = results.one_or_none()
 
-    try:
-        manager = await asyncio.to_thread(CryoRelayManager)
-        app.state = State({"v": manager})
+        if not labels:
+            # Should not happen if on_startup worked, but handle defensively
+            print("Error: Button labels not found in DB during initialization.")
+            raise HTTPException(status_code=500, detail="Button labels not found")
 
-        # after the above two lines, this call should work
-        tree_state = app.state.v.tree.tree_state
-        return tree_state
+        if not tree_state:
+            # Should not happen if initialization logic above worked
+            print("Error: Tree state not available during initialization.")
+            raise HTTPException(
+                status_code=500, detail="Tree state initialization failed"
+            )
+
+        # this should get filtered into InitResponsePublic
+        return InitResponse(
+            tree_state=tree_state,
+            button_labels=labels,  # Pass the validated public model instance
+        )
 
     except Exception as e:
         print(f"Initialization failed: {e}")
-        raise HTTPException(status_code=500, detail="Initialization failed")
+        raise HTTPException(status_code=500, detail=f"Initialization failed: {e}")
+
+
+@app.get("/button_labels", response_model=ButtonLabelsPublic)
+def get_button_labels(session: DBSession):
+    statement = select(DBButtonLabels).where(DBButtonLabels.id == 1)
+    results = session.exec(statement)
+    db_labels = results.one_or_none()
+    if not db_labels:
+        raise HTTPException(status_code=404, detail="Button labels not found")
+
+    return db_labels
+
+
+@app.post("/button_labels", response_model=ButtonLabelsPublic)  # Use public model
+def update_button_labels(
+    labels: ButtonLabelsBase,
+    session: DBSession,  # Use base model for input
+):
+    statement = select(DBButtonLabels).where(DBButtonLabels.id == 1)
+    results = session.exec(statement)
+    db_labels = results.one_or_none()
+
+    if not db_labels:
+        print("Button labels row not found, creating one.")
+        # Create DB model instance from the input base model
+        db_labels = DBButtonLabels(id=1, **labels.model_dump())
+    else:
+        # Update existing labels using data from the input base model
+        for key, value in labels.model_dump().items():
+            # Ensure we don't try to set 'id' if it somehow slips in
+            if key != "id":
+                setattr(db_labels, key, value)
+
+    session.add(db_labels)
+    session.commit()
+    session.refresh(db_labels)
+    print("Button labels updated in DB.")
+
+    # Remove manual dictionary creation
+    # response_dict = {k: v for k, v in db_labels.model_dump().items() if k != 'id'}
+    # Return the DB object directly; FastAPI filters based on response_model
+    return db_labels
 
 
 @app.post("/switch")

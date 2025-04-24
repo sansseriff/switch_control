@@ -11,4 +11,5 @@ dependencies = [
     "pywebview[qt5]>=5.4 ; sys_platform == 'linux'",
     "pywebview[qt]>=5.4 ; sys_platform != 'linux'",
     "requests>=2.32.3",
+    "sqlmodel>=0.0.24",
 ]

@@ -1,6 +1,3 @@
-
-
-
 export interface ButtonState {
   name: string;
   proxy_name: string;
@@ -14,7 +11,6 @@ export interface Verification {
   timestamp: number;
   userConfirmed: boolean;
 }
-
 
 export interface SwitchState {
   pos: boolean;
@@ -31,4 +27,23 @@ export interface TreeState {
   R6: SwitchState;
   R7: SwitchState;
   activated_channel: number;
+}
+
+export interface ButtonLabelState {
+  label_0: string;
+  label_1: string;
+  label_2: string;
+  label_3: string;
+  label_4: string;
+  label_5: string;
+  label_6: string;
+  label_7: string;
+}
+
+export interface ButtonState {
+  name: string;
+  proxy_name: string;
+  default_name: string;
+  idx: number;
+  value: boolean;
 }
