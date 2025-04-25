@@ -62,7 +62,7 @@ from db import (
     ButtonLabels,
     InitResponse,
     InitResponsePublic,
-    ButtonLabelsPublic,
+    ButtonLabelsBase,
 )
 
 FUNCTION_GEN = True
@@ -443,7 +443,7 @@ async def initialize(session: DBSession):  # Use DBSession
         raise HTTPException(status_code=500, detail=f"Initialization failed: {e}")
 
 
-@app.get("/button_labels", response_model=ButtonLabelsPublic)
+@app.get("/button_labels", response_model=ButtonLabelsBase)
 def get_button_labels(session: DBSession):
     statement = select(ButtonLabels).where(ButtonLabels.id == 1)
     results = session.exec(statement)
@@ -454,7 +454,7 @@ def get_button_labels(session: DBSession):
     return db_labels
 
 
-@app.post("/button_labels", response_model=ButtonLabelsPublic)  # Use public model
+@app.post("/button_labels", response_model=ButtonLabelsBase)  # Use public model
 def update_button_labels(
     labels: ButtonLabelsBase,
     session: DBSession,  # Use base model for input

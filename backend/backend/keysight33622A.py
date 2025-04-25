@@ -25,7 +25,7 @@ class keysight33622A(visaInst):
         self.write("*RST")
 
     # General control functions
-    def set_function(self, channel, function_type):
+    def set_function(self, channel: int, function_type: str):
         """
         Set the function type for a specific channel
         :param channel: Channel number (1 or 2)
@@ -34,7 +34,7 @@ class keysight33622A(visaInst):
         self.write(f":SOURce{channel}:FUNCtion {function_type}")
         self.write("*OPC")
 
-    def set_pulse_width(self, channel, width):
+    def set_pulse_width(self, channel: int, width: float):
         """
         Set the width of a pulse in seconds
         :param channel: Channel number (1 or 2)
@@ -43,7 +43,7 @@ class keysight33622A(visaInst):
         self.write(f":SOURce{channel}:FUNCtion:PULSe:WIDTh {width}")
         self.write("*OPC")
 
-    def set_frequency(self, channel, freq):
+    def set_frequency(self, channel: int, freq: float):
         """
         Set the frequency of the output
         :param channel: Channel number (1 or 2)
@@ -52,7 +52,7 @@ class keysight33622A(visaInst):
         self.write(f":SOURce{channel}:FREQuency {freq}")
         self.write("*OPC")
 
-    def set_amplitude(self, channel, amplitude):
+    def set_amplitude(self, channel: int, amplitude: float):
         """
         Set the amplitude of the output
         :param channel: Channel number (1 or 2)
@@ -61,7 +61,7 @@ class keysight33622A(visaInst):
         self.write(f":SOURce{channel}:VOLTage {amplitude}")
         self.write("*OPC")
 
-    def set_offset(self, channel, offset):
+    def set_offset(self, channel: int, offset: float):
         """
         Set the DC offset of the output
         :param channel: Channel number (1 or 2)
@@ -70,7 +70,7 @@ class keysight33622A(visaInst):
         self.write(f":SOURce{channel}:VOLTage:OFFSet {offset}")
         self.write("*OPC")
 
-    def set_phase(self, channel, phase):
+    def set_phase(self, channel: int, phase: float):
         """
         Set the phase of the output in degrees
         :param channel: Channel number (1 or 2)
@@ -79,7 +79,7 @@ class keysight33622A(visaInst):
         self.write(f":SOURce{channel}:PHASe {phase}")
         self.write("*OPC")
 
-    def apply_pulse(self, channel, freq, amplitude, offset):
+    def apply_pulse(self, channel: int, freq: float, amplitude: float, offset: float):
         """
         Configure a pulse waveform with specified parameters
         :param channel: Channel number (1 or 2)
@@ -90,7 +90,7 @@ class keysight33622A(visaInst):
         self.write(f":SOURce{channel}:APPLy:PULSe {freq},{amplitude} VPP,{offset} V")
         self.write("*OPC")
 
-    def set_output(self, channel, state):
+    def set_output(self, channel: int, state: int):
         """
         Turn the output on or off for a specific channel
         :param channel: Channel number (1 or 2)
@@ -99,7 +99,7 @@ class keysight33622A(visaInst):
         self.write(f":OUTPut{channel} {state}")
         self.write("*OPC")
 
-    def set_polarity(self, channel, polarity):
+    def set_polarity(self, channel: int, polarity: str):
         """
         Set the polarity of the output
         :param channel: Channel number (1 or 2)
@@ -119,7 +119,7 @@ class keysight33622A(visaInst):
         """Synchronize the phase of all channels"""
         self.write(":SOURce:PHASe:SYNChronize")
 
-    def enable_burst(self, channel, burst_count=1):
+    def enable_burst(self, channel: int, burst_count: int = 1):
         """
         Enable burst mode for a specific channel
         :param channel: Channel number (1 or 2)
@@ -132,17 +132,17 @@ class keysight33622A(visaInst):
         # self.write(f':SOURce{channel}:BURSt:STATe ON')
         # self.write('*OPC')
 
-    def immediate_trigger(self, channel):
+    def immediate_trigger(self, channel: int):
         self.write(f":TRIGger{channel}")
         # self.write('*OPC')
 
-    def trigger_with_polarity(self, channel, high_level, polarity):
+    def trigger_with_polarity(self, channel: int, high_level: float, polarity: str):
         self.set_pulse_polarity(channel, polarity, high_level)
         self.immediate_trigger(channel)
         self.write("*OPC")
 
     # Maintaining backward compatibility with original functions
-    def filter_channel(self, phase, freq):
+    def filter_channel(self, phase: float, freq: float):
         """Legacy compatibility function for channel 1 settings"""
         self.apply_pulse(1, freq, 0.140, 0)
         self.set_phase(1, phase)
@@ -181,7 +181,7 @@ class keysight33622A(visaInst):
     # self.immediate_trigger(1)
     # time.sleep(1)
 
-    def set_pulse_polarity(self, channel, polarity, high_level=0):
+    def set_pulse_polarity(self, channel: int, polarity: str, high_level: float = 0):
         """
         Set the polarity of the pulse waveform
         :param channel: Channel number (1 or 2)
@@ -200,7 +200,13 @@ class keysight33622A(visaInst):
             raise ValueError("Polarity must be 'POS' or 'NEG'")
         self.write("*OPC")
 
-    def setup_pulse(self, channel=1, period=0.5, width=0.050, edge_time="10000 ns"):
+    def setup_pulse(
+        self,
+        channel: int = 1,
+        period: float = 0.5,
+        width: float = 0.050,
+        edge_time: str = "10000 ns",
+    ):
         """
         Set up a pulse waveform with specified parameters
         :param channel: Channel number (1 or 2)
@@ -221,12 +227,12 @@ class keysight33622A(visaInst):
         # print(self.query('*OPC?'))
 
     def set_thermal_source_mode(self):
-        self.write(f":SOURce1:FUNCtion SQUare")
-        self.write(f":SOURCe2:FUNCtion SQUare")
-        self.write(f":SOURce1:FUNCtion:SQUare:DCYCle 34.5")
-        self.write(f":SOURce2:FUNCtion:SQUare:DCYCle 34.5")
-        self.write(f":SOURce1:FUNCtion:SQUare:PERiod 1")
-        self.write(f":SOURce2:FUNCtion:SQUare:PERiod 1")
+        self.write(":SOURce1:FUNCtion SQUare")
+        self.write(":SOURCe2:FUNCtion SQUare")
+        self.write(":SOURce1:FUNCtion:SQUare:DCYCle 34.5")
+        self.write(":SOURce2:FUNCtion:SQUare:DCYCle 34.5")
+        self.write(":SOURce1:FUNCtion:SQUare:PERiod 1")
+        self.write(":SOURce2:FUNCtion:SQUare:PERiod 1")
         self.set_amplitude(1, 1)
         self.set_amplitude(2, 1.210)
         self.set_offset(1, 0.5)
@@ -246,73 +252,3 @@ if __name__ == "__main__":
         time.sleep(1.2)
         fg.trigger_with_polarity(1, 5.0, "NEG")
         time.sleep(1.2)
-
-    # fg.trigger_with_polarity(1, 5.0, 'POS')
-    # time.sleep(4)
-    # fg.trigger_with_polarity(1, 5.0, 'NEG')
-    # time.sleep(4)
-    # fg.trigger_with_polarity(1, 5.0, 'POS')
-    # time.sleep(4)
-    # fg.trigger_with_polarity(1, 5.0, 'NEG')
-    # time.sleep(4)
-    # fg.trigger_with_polarity(1, 5.0, 'POS')
-    # time.sleep(4)
-    # fg.trigger_with_polarity(1, 5.0, 'NEG')
-    # time.sleep(4)
-
-    # fg.set_thermal_source_mode()
-
-    # time.sleep(0.1)
-    # fg.enable_burst(1, 1)
-
-    # fg.disconnect()
-    # time.sleep(0.1)
-    # fg.setup_immedate_pulse(1, 2.0)
-    # time.sleep(0.1)
-    # fg.set_polarity(1, 'POS')
-
-    # time.sleep(2)
-    # fg.immediate_trigger(1)
-
-    # fg.immediate_pulse(1, 2.0, 'POS')
-
-    # for i in range(3):
-    #     fg.immediate_pulse(1, 2.0, 'POS')
-    #     time.sleep(0.5)
-    #     fg.immediate_pulse(1, 2.0, 'NEG')
-    #     time.sleep(0.5)
-
-    # # fg.set_polarity(1, 'POS')
-    # time.sleep(2)
-    # fg.set_polarity(1, 'NEG')
-
-    # # Example of using the new API
-    # fg.channels_off()
-    # fg.set_function(1, 'PULSe')
-    # fg.set_frequency(1, 5000)
-    # fg.set_pulse_width(1, 4.5e-05)
-    # fg.set_amplitude(1, 0.140)
-    # fg.set_offset(1, 0)
-
-    # fg.set_function(2, 'PULSe')
-    # fg.set_frequency(2, 3000)
-    # fg.set_pulse_width(2, 9e-05)
-    # fg.set_amplitude(2, 0.090)
-    # fg.set_offset(2, 0)
-
-    # fg.set_amplitude(1, 1.111)
-    # fg.set_offset(1, 1.111/2)
-
-    # # time.sleep(2)
-    # # fg.channels_on()
-    # fg.set_output(1, 1)
-    # fg.immediate_trigger(1)
-    # time.sleep(3)
-    # # fg.set_output(1, 0)
-    # # fg.immediate_trigger(1)
-    # fg.immediate_trigger(1)
-    # time.sleep(3)
-    # # fg.set_output(1, 1)
-    # # fg.immediate_trigger(2)
-    # time.sleep(3)
-    # fg.channels_off()

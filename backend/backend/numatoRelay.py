@@ -128,16 +128,13 @@ class Relay(object):
 
     def send_pulse(self, channel: int, pulseWidth: float, verification: Verification):
         assert verification.verified, "Verification not complete"
-        # startime = time.time()
+
         self.turn_on(channel, verification)
         time.sleep(float(pulseWidth / 1000))
         self.turn_off(channel, verification)
-        # t1 = time.time()
-        # print("t1 - starttime: ", t1 - startime)
 
     def close(self):
         self.TurnOffOptChannel()
-        # self.serial.close()
 
     def new(self, channel: int):
         chan = self.get_channel(channel)
@@ -145,7 +142,7 @@ class Relay(object):
         self.write("relay on " + chan)
         t1 = time.time()
         print(t1 - startime)
-        # self.chan_read(channel)
+
         time.sleep(0.1)
         t2 = time.time()
         print(t2 - t1)
@@ -219,33 +216,5 @@ if __name__ == "__main__":
     # run ls /dev/*usb* to find the correct name for the relay
 
     relay = Relay(visa_name_mac)
-    # print(relay.getVersion())
-    # print(relay.ReadAll())
-    # relay.turn_on(3)
-    # print(relay.read(100))
-    # print("again: ", relay.read(100))
+
     relay.Reset()
-    # time.sleep(1)
-    # relay.turn_on(0)
-    # relay.turn_on(1)
-    # relay.turn_on(2)
-    # relay.turn_on(3)
-    # relay.turn_on(4)
-    # relay.turn_on(5)
-    # relay.turn_on(6)
-    # relay.turn_on(7)
-
-    # relay.turn_on(4)
-
-    # time.sleep(2)
-    # relay.turn_off(5)
-    # time.sleep(2)
-    # relay.turn_on(2)
-    # time.sleep(2)
-    # relay.turn_off(2)
-
-    # relay.chan_read(3)
-    # time.sleep(1)
-    # print(relay.ReadAll())
-    # print("result on 3: ", relay.chan_read(3))
-    # print("result on 3: ", relay.chan_read(2))

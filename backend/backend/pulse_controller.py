@@ -6,6 +6,7 @@ from node import Node, MaybeNode
 
 from abc import ABC, abstractmethod
 from models import SwitchState, Tree, T
+from keysight33622A import keysight33622A
 
 
 class PulseController(ABC):
@@ -44,6 +45,13 @@ class PulseController(ABC):
                 try:
                     relay_board = Relay(port)
                     print("Relay initialized successfully")
+                    for r in range(8):
+                        relay_board.turn_off(
+                            r,
+                            Verification(
+                                verified=True, timestamp=1, userConfirmed=True
+                            ),
+                        )
                     return relay_board
                 except Exception as error:
                     print(f"Failed to initialize relay: {error}")
@@ -52,6 +60,7 @@ class PulseController(ABC):
 
         # If we reach here, either no ports were found or all connection attempts failed
         relay_board = Relay(None)
+
         return relay_board
 
     def cleanup(self):
@@ -107,8 +116,21 @@ class FunctionGeneratorPulseController(PulseController):
     cryogenic relays.
     """
 
-    def __init__(self, sleep_time: float = 0.050, pulse_time: float = 50):
+    def __init__(
+        self,
+        sleep_time: float = 0.050,
+        pulse_time: float = 50,
+        pulse_amplitude: float = 2.0,
+    ):
         super().__init__(sleep_time, pulse_time)
+
+        # turn 1 into 1 1
+        # turn 2 into 1 0 1
+        # turn 3 into 1 0 0
+        # turn 4 into 0 1 1
+        # turn 5 into 0 1 0
+        # turn 6 into 0 0 1
+        # turn 7 into 0 0 0
 
         self.nodes = [Node(f"R{i}") for i in range(1, 7)]
         self.R1, self.R2, self.R3, self.R4, self.R5, self.R6 = self.nodes
@@ -155,25 +177,73 @@ class FunctionGeneratorPulseController(PulseController):
         )
         self.tree = T(tree_state=self.tree_state, activated_channel=0)
 
-    def flip_left(self, channel: int, verification: Verification):
-        # Implement function generator logic for flipping left
+        # self.fg = keysight33622A("10.9.0.50")
+        # self.fg.connect()
+        # self.fg.setup_pulse(width=0.2)
+        # self.fg.set_output(1, 1)
 
-        # flip the channel numbering
-        # channel = 7 - channel
-        # switch from user to relay channel numbering
-        # channel -= 1
-        binary = bin(channel)[2:]
-        # binary should be 3 digits long
-        binary = binary.zfill(3)
-        print("binary: ", binary)
+        self.pulse_amplitude = pulse_amplitude
+
+    def flip_left(self, channel: int, verification: Verification):
+        self.wire_switch(channel, verification)
+        time.sleep(0.1)
+        print("SENDING POSITIVE PULSE")
+        # self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
+        time.sleep(0.1)
+
+        time.sleep(3)
 
     def flip_right(self, channel: int, verification: Verification):
-        # Implement function generator logic for flipping right
-        # flip the channel numbering
+        self.wire_switch(channel, verification)
+        time.sleep(0.1)
+        print("SENDING NEGATIVE PULSE")
+        # self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")
+        time.sleep(0.1)
+        time.sleep(3)
+
+    def wire_switch(self, channel: int, verification: Verification):
+        """
+        Wire switch the function generator to the specified channel.
+        """
         channel = 7 - channel
-        # switch from user to relay channel numbering
-        # channel -= 1
         binary = bin(channel)[2:]
         # binary should be 3 digits long
         binary = binary.zfill(3)
         print("binary: ", binary)
+
+        current_node = self.top_node
+
+        for bit in enumerate(binary):
+            if type(current_node) is not Node:
+                print("Reached a None or end node, stopping.")
+                continue
+
+            print(
+                f"starting with bit {bit} of {binary} at node {current_node.relay_name}"
+            )
+            if bit[1] == "0":
+                # if not current_node.polarity:
+                current_node.polarity = True
+                idx = int(current_node.relay_index)
+                # print(f"flip cryo relay {current_node.relay_index} left")
+                # v.pulse_controller.flip_left(idx, verification)
+                print("turning OFF relay ", idx)
+                self.relay_board.turn_off(idx, verification)
+            else:
+                # if current_node.polarity:
+                # print(f"flip cryo relay {current_node.relay_index} right")
+                current_node.polarity = False
+                idx = int(current_node.relay_index)
+                # v.pulse_controller.flip_right(idx, verification)
+                print("turning ON relay ", idx)
+                self.relay_board.turn_on(idx, verification)
+
+            current_node = current_node.to_next()
+
+        # time.sleep(10)
+
+    def cleanup(self):
+        self.relay_board.Reset()
+        super().cleanup()
+        if self.fg:
+            self.fg.disconnect()

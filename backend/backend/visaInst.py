@@ -10,7 +10,8 @@ A generic base class to talk to instrument hardware over TCIP with visa
 
 import pyvisa
 
-class visaInst():
+
+class visaInst:
     def __init__(self, ipAddress, port=5025, offline=False):
         """
 
@@ -20,18 +21,22 @@ class visaInst():
         """
         self.ipAddress = ipAddress
         self.port = port
-        self.offline=offline
+        self.offline = offline
 
     def connect(self):
         if self.offline:
-            print("Connected to offline instrument "+str(self.__class__))
+            print("Connected to offline instrument " + str(self.__class__))
             return True
-        rm = pyvisa.ResourceManager('@py')
-        self.inst = rm.open_resource("TCPIP::" + self.ipAddress + "::"+str(self.port)+"::SOCKET")
-        self.inst.read_termination = '\n'
-        self.inst.timeout = max(10000, self.inst.timeout)    # Make visa timeout at least 10000 ms
+        rm = pyvisa.ResourceManager("@py")
+        self.inst = rm.open_resource(
+            "TCPIP::" + self.ipAddress + "::" + str(self.port) + "::SOCKET"
+        )
+        self.inst.read_termination = "\n"
+        self.inst.timeout = max(
+            10000, self.inst.timeout
+        )  # Make visa timeout at least 10000 ms
         print(self.query("*IDN?"))
-        #print(self.inst.timeout)
+        # print(self.inst.timeout)
         return self.inst
 
     def disconnect(self):
@@ -40,16 +45,17 @@ class visaInst():
             return True
         return self.inst.close()
 
-    def write(self, cmd):
-        if self.offline: return True
+    def write(self, cmd: str):
+        if self.offline:
+            return True
         return self.inst.write(cmd)
-    def read(self):
-        if self.offline: return ''
+
+    def read(self) -> str:
+        if self.offline:
+            return ""
         return self.inst.read()
-    def query(self, cmd):
-        if self.offline: return ''
+
+    def query(self, cmd: str) -> str:
+        if self.offline:
+            return ""
         return self.inst.query(cmd)
-
-
-
-

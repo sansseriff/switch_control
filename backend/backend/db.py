@@ -10,20 +10,12 @@ from models import ButtonLabelsBase, Tree
 
 # Define the SQLModel for the database, inheriting from the base and adding the ID
 class ButtonLabels(SQLModel, ButtonLabelsBase, table=True):
-    id: Optional[int] = Field(
-        default=1, primary_key=True
-    )  # Use a fixed ID for the single row
+    id: Optional[int] = Field(default=1, primary_key=True)
 
 
-# Pydantic model for public responses (inherits from base, excludes id implicitly)
-class ButtonLabelsPublic(ButtonLabelsBase):
-    pass
-
-
-# Pydantic model for the response of the /initialize endpoint
 class InitializationResponse(BaseModel):
     tree_state: Tree
-    button_labels: ButtonLabelsPublic
+    button_labels: ButtonLabelsBase
 
 
 class InitResponse(BaseModel):
@@ -33,7 +25,7 @@ class InitResponse(BaseModel):
 
 class InitResponsePublic(BaseModel):
     tree_state: Tree
-    button_labels: ButtonLabelsPublic
+    button_labels: ButtonLabelsBase
 
 
 sqlite_file_name = "database.db"
