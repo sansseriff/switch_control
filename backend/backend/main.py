@@ -32,7 +32,7 @@ from multiprocessing import Manager, Event
 import requests
 import argparse
 
-import AppKit
+# import AppKit
 
 from pulse_controller import (
     PulseController,
@@ -177,12 +177,12 @@ FRAMELESS: bool = False
 # OSX: ls /dev/*usb*
 
 
-def add_buttons(window: webview.Window):
-    window.native.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(False)  # type: ignore
-    window.native.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(  # type: ignore
-        False
-    )
-    window.native.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(False)  # type: ignore
+# def add_buttons(window: webview.Window):
+#     window.native.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(False)  # type: ignore
+#     window.native.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(  # type: ignore
+#         False
+#     )
+#     window.native.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(False)  # type: ignore
 
 
 def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
@@ -201,8 +201,8 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
 
     # https://github.com/r0x0r/pywebview/issues/1496#issuecomment-2410471185
 
-    if FRAMELESS:
-        win.events.before_load += add_buttons
+    # if FRAMELESS:
+    #     win.events.before_load += add_buttons
     win.events.closed += on_closed
     print("debug is: ", debug)
     webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
@@ -264,7 +264,7 @@ def init_tree(verification: Verification):
         # time.sleep(SLEEP_TIME)
         node.polarity = False
         idx = int(node.relay_index)
-        v.pulse_controller.flip_right(idx, verification)
+        v.pulse_controller.flip_left(idx, verification)
 
     # app.state.v.switch.turn_off(0, verification)
 
@@ -343,13 +343,13 @@ def channel_to_state(
                 current_node.polarity = True
                 idx = int(current_node.relay_index)
                 print(f"flip cryo relay {current_node.relay_index} left")
-                v.pulse_controller.flip_left(idx, verification)
+                v.pulse_controller.flip_right(idx, verification)
         else:
             if (current_node.polarity) or (not REMEMBER_STATE):
                 print(f"flip cryo relay {current_node.relay_index} right")
                 current_node.polarity = False
                 idx = int(current_node.relay_index)
-                v.pulse_controller.flip_right(idx, verification)
+                v.pulse_controller.flip_left(idx, verification)
         current_node = current_node.to_next()
     update_color()
     app.state.v.tree.tree_state = flatten_tree(v.top_node)
@@ -492,15 +492,15 @@ def toggle_switch(toggle: ToggleRequest):
     sw = v.nodes[toggle.number - 1]
     # print("the switch to toggle: ", sw.relay_name)
 
-    if not sw.polarity:
-        sw.polarity = True
+    if sw.polarity:
         idx = int(sw.relay_index)
         v.pulse_controller.flip_left(idx, toggle.verification)
+        sw.polarity = False
 
     else:
-        sw.polarity = False
         idx = int(sw.relay_index)
         v.pulse_controller.flip_right(idx, toggle.verification)
+        sw.polarity = True
 
     update_color()
     app.state.v.tree.tree_state = flatten_tree(v.top_node)

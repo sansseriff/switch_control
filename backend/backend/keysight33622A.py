@@ -138,7 +138,9 @@ class keysight33622A(visaInst):
 
     def trigger_with_polarity(self, channel: int, high_level: float, polarity: str):
         self.set_pulse_polarity(channel, polarity, high_level)
+        time.sleep(0.5) # do I need time for the function generator to update its settings?
         self.immediate_trigger(channel)
+        time.sleep(0.5)
         self.write("*OPC")
 
     # Maintaining backward compatibility with original functions
@@ -222,9 +224,16 @@ class keysight33622A(visaInst):
         self.write(f":SOURce{channel}:FUNCtion:PULSe:PERiod {period}")
         self.write(f":SOURce{channel}:FUNCtion:PULSe:WIDTh {width}")
         self.write(f":SOURce{channel}:FUNCtion:PULSe:TRANsition:BOTH {edge_time}")
+        self.enable_burst(channel)
         self.write("*OPC")
 
         # print(self.query('*OPC?'))
+
+    def enable_burst(self, channel: int):
+        self.write(f":SOURce{channel}:BURSt:STATe ON")
+
+    def disable_burst(self, channel: int):
+        self.write(f":SOURce{channel}:BURSt:STATe OFF")
 
     def set_thermal_source_mode(self):
         self.write(":SOURce1:FUNCtion SQUare")
@@ -233,6 +242,8 @@ class keysight33622A(visaInst):
         self.write(":SOURce2:FUNCtion:SQUare:DCYCle 34.5")
         self.write(":SOURce1:FUNCtion:SQUare:PERiod 1")
         self.write(":SOURce2:FUNCtion:SQUare:PERiod 1")
+
+        self.disable_burst(1)
         self.set_amplitude(1, 1)
         self.set_amplitude(2, 1.210)
         self.set_offset(1, 0.5)
@@ -243,12 +254,28 @@ if __name__ == "__main__":
     fg = keysight33622A("10.9.0.50")
     fg.connect()
 
-    fg.setup_pulse(width=0.2)
+    time.sleep(3)
 
+    fg.setup_pulse(period = 4, width=0.5)
+
+    # fg.set_thermal_source_mode()
     fg.set_output(1, 1)
 
-    for i in range(60):
+    # fg.write(f':SOURce{1}:BURSt:GATE:POLarity NORMal')
+
+    # fg.enable_burst(1)
+
+    for i in range(2):
         fg.trigger_with_polarity(1, 5.0, "POS")
-        time.sleep(1.2)
+        time.sleep(5)
         fg.trigger_with_polarity(1, 5.0, "NEG")
-        time.sleep(1.2)
+        time.sleep(5)
+
+    # time.sleep(3)
+
+    # fg.set_thermal_source_mode()
+    # for i in range(2):
+    #     fg.trigger_with_polarity(1, 5.0, "POS")
+    #     time.sleep(1.2)
+    #     fg.trigger_with_polarity(1, 5.0, "NEG")
+    #     time.sleep(1.2)

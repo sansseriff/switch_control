@@ -120,7 +120,7 @@ class FunctionGeneratorPulseController(PulseController):
         self,
         sleep_time: float = 0.050,
         pulse_time: float = 50,
-        pulse_amplitude: float = 2.0,
+        pulse_amplitude: float = 5.0,
     ):
         super().__init__(sleep_time, pulse_time)
 
@@ -177,29 +177,29 @@ class FunctionGeneratorPulseController(PulseController):
         )
         self.tree = T(tree_state=self.tree_state, activated_channel=0)
 
-        # self.fg = keysight33622A("10.9.0.50")
-        # self.fg.connect()
-        # self.fg.setup_pulse(width=0.2)
-        # self.fg.set_output(1, 1)
+        self.fg = keysight33622A("10.9.0.50")
+        self.fg.connect()
+        self.fg.setup_pulse(width=0.050) # 50 ms
+        self.fg.set_output(1, 1)
 
         self.pulse_amplitude = pulse_amplitude
 
     def flip_left(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
-        time.sleep(0.1)
+        time.sleep(0.15)
         print("SENDING POSITIVE PULSE")
-        # self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
-        time.sleep(0.1)
+        self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
+        time.sleep(0.15)
 
-        time.sleep(3)
+        # time.sleep(0.5)
 
     def flip_right(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
-        time.sleep(0.1)
+        time.sleep(0.15)
         print("SENDING NEGATIVE PULSE")
-        # self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")
-        time.sleep(0.1)
-        time.sleep(3)
+        self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")
+        time.sleep(0.15)
+        # time.sleep(0.5)
 
     def wire_switch(self, channel: int, verification: Verification):
         """
