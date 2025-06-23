@@ -5,6 +5,7 @@
 
   interface Props {
     onVerifiedClick: (verification: Verification) => void;
+    onInitialClick?: () => void;
     children: Snippet;
     width_rem?: number;
     highlighted?: boolean;
@@ -15,6 +16,7 @@
 
   let {
     onVerifiedClick,
+    onInitialClick = undefined,
     children,
     width_rem = 6.5,
     highlighted = false,
@@ -27,6 +29,9 @@
   aria-label="switch_toggle"
   onclick={() => {
     isOpen = true;
+    if (onInitialClick) {
+      onInitialClick();
+    }
   }}
   class:highlighted
   style="width: {width_rem}rem"

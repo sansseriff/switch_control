@@ -75,6 +75,10 @@ export function requestChannel(channel_request: ChannelRequest): Promise<TreeSta
     return fetchWithConfig('/channel', 'POST', channel_request);
 }
 
+export function preemptiveAmpShutoff(): Promise<TreeState> {
+    return fetchWithConfig('/preemptive_amp_shutoff', 'GET');
+}
+
 
 export function flipSwitch(switch_toggle_request: ToggleRequest): Promise<TreeState> {
     return fetchWithConfig('/switch', 'POST', switch_toggle_request);

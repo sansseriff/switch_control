@@ -1,5 +1,5 @@
 import type { TreeState, SwitchState, ButtonLabelState } from "./types"; // Import ButtonLabelState
-import { reset, flipSwitch, reAssert, requestChannel, updateButtonLabels } from "./api"; // Import updateButtonLabels
+import { reset, flipSwitch, reAssert, requestChannel, updateButtonLabels, preemptiveAmpShutoff } from "./api"; // Import updateButtonLabels
 import type { Verification } from "./types";
 import { initialize } from "./api";
 import type { InitializationResponse } from "./api"; // Import InitializationResponse
@@ -96,6 +96,10 @@ class Tree {
       this.st = ss;
       this.updateButtons();
     });
+  }
+
+  preemptiveAmpShutoff() {
+    preemptiveAmpShutoff()
   }
 
   // Add method to save button labels

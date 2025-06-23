@@ -96,6 +96,7 @@
       <div class="spacer">
         {#if button_mode}
           <ProtectedButton
+            onInitialClick={() => tree.preemptiveAmpShutoff()}
             onVerifiedClick={(verification) =>
               tree.toChannel(idx, verification)}
             width_rem={5}

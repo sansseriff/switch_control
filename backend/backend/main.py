@@ -50,6 +50,9 @@ from models import (
 )
 
 
+from ampProtector import AmpProtector
+
+
 # print("THISS: ", THISS)
 from location import WEB_DIR
 import mimetypes
@@ -127,6 +130,14 @@ class CryoRelayManager:
             activated_channel=0,
         )
         self.tree = T(tree_state=self.tree_state, activated_channel=0)
+
+
+        # if this is enabled, and the supply is not connected, 
+        # you'll get an indecipherable error
+        # I have another program that accesses the keysight supply at the 
+        # same time. Using sockets and a client connection to allow
+        # multiple python processes to access the VISA device
+        self.amp_protector = AmpProtector(on=True, disabled=False, use_client=True)
 
     def cleanup(self):
         self.pulse_controller.cleanup()
@@ -258,6 +269,8 @@ def flatten_tree(root: MaybeNode) -> Tree:
 def init_tree(verification: Verification):
     v: CryoRelayManager = app.state.v
 
+    v.amp_protector.turn_off_amp()
+
     # v.pulse_controller.turn_on(0, verification)
 
     for node in v.nodes:
@@ -271,11 +284,14 @@ def init_tree(verification: Verification):
     update_color()
     app.state.v.tree.tree_state = flatten_tree(v.top_node)
 
+    v.amp_protector.turn_on_if_previously_on()
+
     return v.tree.tree_state
 
 
 def re_assert_tree(verification: Verification):
     v: CryoRelayManager = app.state.v
+    v.amp_protector.turn_off_amp()
     current_node = v.top_node
 
     while type(current_node) is Node:
@@ -290,6 +306,7 @@ def re_assert_tree(verification: Verification):
 
     update_color()
     app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    v.amp_protector.turn_on_if_previously_on()
 
     return app.state.v.tree.tree_state
 
@@ -320,6 +337,9 @@ def channel_to_state(
     take in user-numbering channel (1-8)
     """
     v: CryoRelayManager = app.state.v
+    v.amp_protector.turn_off_amp()
+
+
     if channel < 0 or channel > 7:
         print("Invalid channel number, stopping.")
         return
@@ -353,6 +373,9 @@ def channel_to_state(
         current_node = current_node.to_next()
     update_color()
     app.state.v.tree.tree_state = flatten_tree(v.top_node)
+
+    v.amp_protector.turn_on_if_previously_on()
+
     return v.tree.tree_state
 
 
@@ -485,9 +508,22 @@ def update_button_labels(
     return db_labels
 
 
+# auto-shutoff amps when showing the warning dialog
+@app.get("/preemptive_amp_shutoff")
+def preemptive_amp_shutoff():
+    v: CryoRelayManager = app.state.v
+    v.amp_protector.turn_off_amp()
+
+
+    return v.tree.tree_state
+
+
+
 @app.post("/switch")
 def toggle_switch(toggle: ToggleRequest):
     v: CryoRelayManager = app.state.v
+
+    v.amp_protector.turn_off_amp()
 
     sw = v.nodes[toggle.number - 1]
     # print("the switch to toggle: ", sw.relay_name)
@@ -504,6 +540,8 @@ def toggle_switch(toggle: ToggleRequest):
 
     update_color()
     app.state.v.tree.tree_state = flatten_tree(v.top_node)
+
+    v.amp_protector.turn_on_if_previously_on()
     return v.tree.tree_state
 
 
