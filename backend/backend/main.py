@@ -517,6 +517,17 @@ def preemptive_amp_shutoff():
 
     return v.tree.tree_state
 
+@app.get("/cryo_mode")
+def set_cryo_mode():
+    v: CryoRelayManager = app.state.v
+    v.pulse_controller.cryo_mode()
+
+@app.get("/room_temp_mode")
+def set_room_temp_mode():
+    v: CryoRelayManager = app.state.v
+    v.pulse_controller.room_temp_mode()
+
+
 
 
 @app.post("/switch")

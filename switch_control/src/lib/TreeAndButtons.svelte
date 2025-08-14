@@ -168,7 +168,8 @@
     padding-bottom: 0.25rem;
     height: 1.7rem;
 
-    width: 5rem;
+    width: 10rem;
+    min-width: 8rem;
     font-family: Arial, Helvetica, sans-serif;
   }
 

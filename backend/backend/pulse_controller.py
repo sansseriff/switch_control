@@ -36,6 +36,20 @@ class PulseController(ABC):
     def flip_right(self, channel: int, verification: Verification):
         pass
 
+    @abstractmethod
+    def cryo_mode(self):
+        """
+        Set the pulse controller to cryogenic mode.
+        """
+        pass
+    
+    @abstractmethod
+    def room_temp_mode(self):
+        """
+        Set the pulse controller to room temperature mode.
+        """
+        pass
+
     def initialize_relay(self):
         relay_board = None  # Initialize with a default value
         serial_ports = get_serial_ports()
@@ -108,6 +122,13 @@ class SimpleRelayPulseController(PulseController):
         time.sleep(self.sleep_time)
         self.relay_board.turn_off(0, verification)
         time.sleep(self.sleep_time)
+
+
+    def cryo_mode(self):
+        pass
+    
+    def room_temp_mode(self):
+        pass
 
 
 class FunctionGeneratorPulseController(PulseController):
@@ -202,6 +223,13 @@ class FunctionGeneratorPulseController(PulseController):
         self.fg.set_output(1, 1)
 
         self.pulse_amplitude = pulse_amplitude
+
+
+    def cryo_mode(self):
+        self.pulse_amplitude = 2.5
+        
+    def room_temp_mode(self):
+        self.pulse_amplitude = 5.0
 
     def flip_left(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
