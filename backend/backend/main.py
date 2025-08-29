@@ -8,7 +8,7 @@ import multiprocessing
 from pathlib import Path
 
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import threading
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.responses import HTMLResponse
@@ -22,17 +22,14 @@ import tempfile
 
 from verification import Verification
 from multiprocessing.connection import Connection
-from starlette.datastructures import State
 from fastapi import HTTPException
-from multiprocessing import Manager, Event
 
 # import SyncManager type
 # from multiprocessing.managers import SyncManager
 # from multiprocessing.synchronize import Event as EventType
-import requests
 import argparse
 
-import AppKit
+import AppKit # type: ignore
 
 from pulse_controller import (
     PulseController,
@@ -49,6 +46,8 @@ from models import (
     T,
 )
 
+from typing import Any
+
 
 # print("THISS: ", THISS)
 from location import WEB_DIR
@@ -62,7 +61,6 @@ from db import (
     ButtonLabels,
     InitResponse,
     InitResponsePublic,
-    ButtonLabelsBase,
 )
 
 FUNCTION_GEN = True
@@ -77,7 +75,8 @@ class CryoRelayManager:
     """
 
     def __init__(self, function_gen: bool = True):
-        # Initialize switch
+        # Initialize switch and synchronization
+        self.lock = threading.Lock()
 
         if function_gen:
             self.pulse_controller: PulseController = FunctionGeneratorPulseController()
@@ -132,6 +131,13 @@ class CryoRelayManager:
         self.pulse_controller.cleanup()
 
 
+class Services:
+    """Container for long-lived services"""
+
+    def __init__(self, cryo: CryoRelayManager):
+        self.cryo = cryo
+
+
 # Define the lifespan context manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -139,9 +145,17 @@ async def lifespan(app: FastAPI):
     print("Creating database and tables...")
     create_db_and_tables()
     print("Database and tables created.")
+    # Initialize hardware/services once for the process
+    cryo_manager = await asyncio.to_thread(CryoRelayManager, FUNCTION_GEN)
+    app.state.services = Services(cryo=cryo_manager)
     yield
     # Code to run on shutdown (if any)
     print("Application shutting down.")
+    try:
+        app.state.services.cryo.cleanup()
+        print("CryoRelayManager cleaned up.")
+    except Exception as e:
+        print(f"Error during CryoRelayManager cleanup: {e}")
 
 
 # Pass the lifespan manager to the FastAPI app
@@ -158,11 +172,13 @@ app.add_middleware(
 )
 
 
-# Add dependency
-def get_state_manager():
-    print("the manager: ", app.state.v)
-    print("something inside: ", app.state.v.pulse_controller)
-    return app.state.v.v
+# Dependencies to access services without touching app.state in handlers
+def get_services(request: Request) -> Services:
+    return request.app.state.services
+
+
+def get_cryo(services: Annotated[Services, Depends(get_services)]) -> CryoRelayManager:
+    return services.cryo
 
 
 mimetypes.init()
@@ -170,14 +186,14 @@ mimetypes.init()
 PULSE_TIME = 50
 SLEEP_TIME = 0.050
 REMEMBER_STATE: bool = False
-FRAMELESS: bool = False
+FRAMELESS: bool = True
 
 
 # https://numato.com/docs/8-channel-usb-relay-module/
 # OSX: ls /dev/*usb*
 
 
-def add_buttons(window: webview.Window):
+def add_buttons(window: webview.Window): 
     window.native.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(False)  # type: ignore
     window.native.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(  # type: ignore
         False
@@ -235,14 +251,16 @@ async def return_index(request: Request):
 
 
 def flatten_tree(root: MaybeNode) -> Tree:
-    state: dict[str, SwitchState | int] = {}
-    state["activated_channel"] = T.activated_channel
+    # Initialize defaults
+    r_states: dict[str, SwitchState] = {
+        f"R{i}": SwitchState(pos=False, color=False) for i in range(1, 8)
+    }
     queue = [root]
 
     while queue:
         current_node = queue.pop(0)
-        if type(current_node) is Node:
-            state[current_node.relay_name] = SwitchState(
+        if isinstance(current_node, Node):
+            r_states[current_node.relay_name] = SwitchState(
                 pos=current_node.polarity, color=current_node.in_use
             )
 
@@ -251,54 +269,63 @@ def flatten_tree(root: MaybeNode) -> Tree:
             if isinstance(current_node.right, Node):
                 queue.append(current_node.right)
 
-    # print("state: ", state)
-    return Tree(**state)
+    return Tree(
+        R1=r_states["R1"],
+        R2=r_states["R2"],
+        R3=r_states["R3"],
+        R4=r_states["R4"],
+        R5=r_states["R5"],
+        R6=r_states["R6"],
+        R7=r_states["R7"],
+        activated_channel=T.activated_channel,
+    )
 
 
-def init_tree(verification: Verification):
-    v: CryoRelayManager = app.state.v
+def init_tree(verification: Verification, cryo: CryoRelayManager):
+    v: CryoRelayManager = cryo
 
     # v.pulse_controller.turn_on(0, verification)
-
-    for node in v.nodes:
-        # time.sleep(SLEEP_TIME)
-        node.polarity = False
-        idx = int(node.relay_index)
-        v.pulse_controller.flip_right(idx, verification)
+    with v.lock:
+        for node in v.nodes:
+            # time.sleep(SLEEP_TIME)
+            node.polarity = False
+            idx = int(node.relay_index)
+            v.pulse_controller.flip_right(idx, verification)
 
     # app.state.v.switch.turn_off(0, verification)
 
-    update_color()
-    app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    update_color(v)
+    v.tree.tree_state = flatten_tree(v.top_node)
 
     return v.tree.tree_state
 
 
-def re_assert_tree(verification: Verification):
-    v: CryoRelayManager = app.state.v
+def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
+    v: CryoRelayManager = cryo
     current_node = v.top_node
 
-    while type(current_node) is Node:
-        idx = int(current_node.relay_index)
-        if current_node.polarity is True:
-            v.pulse_controller.flip_right(idx, verification)
-        else:
-            v.pulse_controller.flip_left(idx, verification)
-        current_node = current_node.to_next()
-        if type(current_node) is int:
-            break
+    with v.lock:
+        while isinstance(current_node, Node):
+            idx = int(current_node.relay_index)
+            if current_node.polarity is True:
+                v.pulse_controller.flip_right(idx, verification)
+            else:
+                v.pulse_controller.flip_left(idx, verification)
+            current_node = current_node.to_next()
+            if type(current_node) is int:
+                break
 
-    update_color()
-    app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    update_color(v)
+    v.tree.tree_state = flatten_tree(v.top_node)
 
-    return app.state.v.tree.tree_state
+    return v.tree.tree_state
 
 
-def update_color():
-    for node in app.state.v.nodes:
+def update_color(cryo: CryoRelayManager):
+    for node in cryo.nodes:
         node.in_use = False
 
-    current_node = app.state.v.top_node
+    current_node = cryo.top_node
     while current_node is not None:
         if type(current_node) is int:
             T.activated_channel = current_node
@@ -315,11 +342,12 @@ def update_color():
 def channel_to_state(
     channel: int,
     verification: Verification,
+    cryo: CryoRelayManager,
 ):
     """
     take in user-numbering channel (1-8)
     """
-    v: CryoRelayManager = app.state.v
+    v: CryoRelayManager = cryo
     if channel < 0 or channel > 7:
         print("Invalid channel number, stopping.")
         return
@@ -330,39 +358,40 @@ def channel_to_state(
     binary = bin(channel)[2:]
     # binary should be 3 digits long
     binary = binary.zfill(3)
-    current_node = app.state.v.top_node
+    current_node = v.top_node
 
-    for bit in enumerate(binary):
-        print(bit[1])
-        if type(current_node) is not Node:
-            print("Reached a None or end node, stopping.")
-            return
-        time.sleep(SLEEP_TIME)
-        if bit[1] == "0":
-            if (not current_node.polarity) or (not REMEMBER_STATE):
-                current_node.polarity = True
-                idx = int(current_node.relay_index)
-                print(f"flip cryo relay {current_node.relay_index} left")
-                v.pulse_controller.flip_left(idx, verification)
-        else:
-            if (current_node.polarity) or (not REMEMBER_STATE):
-                print(f"flip cryo relay {current_node.relay_index} right")
-                current_node.polarity = False
-                idx = int(current_node.relay_index)
-                v.pulse_controller.flip_right(idx, verification)
-        current_node = current_node.to_next()
-    update_color()
-    app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    with v.lock:
+        for bit in enumerate(binary):
+            print(bit[1])
+            if not isinstance(current_node, Node):
+                print("Reached a None or end node, stopping.")
+                return
+            time.sleep(SLEEP_TIME)
+            if bit[1] == "0":
+                if (not current_node.polarity) or (not REMEMBER_STATE):
+                    current_node.polarity = True
+                    idx = int(current_node.relay_index)
+                    print(f"flip cryo relay {current_node.relay_index} left")
+                    v.pulse_controller.flip_left(idx, verification)
+            else:
+                if (current_node.polarity) or (not REMEMBER_STATE):
+                    print(f"flip cryo relay {current_node.relay_index} right")
+                    current_node.polarity = False
+                    idx = int(current_node.relay_index)
+                    v.pulse_controller.flip_right(idx, verification)
+            current_node = current_node.to_next()
+    update_color(v)
+    v.tree.tree_state = flatten_tree(v.top_node)
     return v.tree.tree_state
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
+async def validation_exception_handler(request: Request, exc: Any):
     return PlainTextResponse(str(exc), status_code=400)
 
 
 @app.exception_handler(400)
-async def bad_request_handler(request: Request, exc):
+async def bad_request_handler(request: Request, exc: Any):
     print("detail: ", exc)
     return JSONResponse(
         status_code=400,
@@ -371,34 +400,38 @@ async def bad_request_handler(request: Request, exc):
 
 
 @app.post("/reset")
-def reset(verification: Verification):
-    return init_tree(verification)
+def reset(
+    verification: Verification, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+):
+    return init_tree(verification, cryo)
 
 
 # Make sure the tree is in the correct state by re-submitting desired path
 @app.post("/re_assert")
-def re_assert(verification: Verification):
-    return re_assert_tree(verification)
+def re_assert(
+    verification: Verification, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+):
+    return re_assert_tree(verification, cryo)
 
 
 @app.post("/channel")
-def request_channel(channel: Channel):
+def request_channel(
+    channel: Channel, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+):
     print("cryo-channel requested: ", channel.number)
-    return channel_to_state(channel.number, channel.verification)
+    return channel_to_state(channel.number, channel.verification, cryo)
 
 
 @app.get("/tree")
-def get_tree():
-    # this will error if the tree is not initialized
-    v: CryoRelayManager = app.state.v
-    try:
-        return v.tree.tree_state
-    except:
-        print("/tree endpoint called before initialization")
+def get_tree(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
+    # tree is always available after lifespan init
+    return cryo.tree.tree_state
 
 
 @app.get("/initialize", response_model=InitResponsePublic)
-async def initialize(session: DBSession):  # Use DBSession
+async def initialize(
+    session: DBSession, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+):  # Use DBSession
     """
     Initializes the application state, including the tree state and button labels.
     """
@@ -406,14 +439,8 @@ async def initialize(session: DBSession):  # Use DBSession
     labels: ButtonLabels | None = None  # Expecting the DB model
 
     try:
-        # Check if CryoRelayManager is already initialized in app state
-        if hasattr(app.state, "v") and app.state.v:
-            tree_state = app.state.v.tree.tree_state
-        else:
-            # Initialize CryoRelayManager if not already done
-            manager = await asyncio.to_thread(CryoRelayManager, FUNCTION_GEN)
-            app.state = State({"v": manager})
-            tree_state = app.state.v.tree.tree_state
+        # Use the already initialized manager from lifespan
+        tree_state = cryo.tree.tree_state
 
         # Fetch button labels from the database
         statement = select(ButtonLabels).where(ButtonLabels.id == 1)
@@ -486,38 +513,28 @@ def update_button_labels(
 
 
 @app.post("/switch")
-def toggle_switch(toggle: ToggleRequest):
-    v: CryoRelayManager = app.state.v
+def toggle_switch(
+    toggle: ToggleRequest, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+):
+    v: CryoRelayManager = cryo
 
     sw = v.nodes[toggle.number - 1]
     # print("the switch to toggle: ", sw.relay_name)
 
-    if not sw.polarity:
-        sw.polarity = True
-        idx = int(sw.relay_index)
-        v.pulse_controller.flip_left(idx, toggle.verification)
+    with v.lock:
+        if not sw.polarity:
+            sw.polarity = True
+            idx = int(sw.relay_index)
+            v.pulse_controller.flip_left(idx, toggle.verification)
 
-    else:
-        sw.polarity = False
-        idx = int(sw.relay_index)
-        v.pulse_controller.flip_right(idx, toggle.verification)
+        else:
+            sw.polarity = False
+            idx = int(sw.relay_index)
+            v.pulse_controller.flip_right(idx, toggle.verification)
 
-    update_color()
-    app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    update_color(v)
+    v.tree.tree_state = flatten_tree(v.top_node)
     return v.tree.tree_state
-
-
-@app.post("/cleanup")
-async def cleanup():
-    v: CryoRelayManager = app.state.v
-    try:
-        if app.state and v:
-            v.cleanup()
-            print("Cleanup done")
-        return {"ok": True}
-    except Exception as e:
-        print(f"Cleanup failed: {e}")
-        raise HTTPException(status_code=500, detail="Cleanup failed")
 
 
 def parse_arguments():
@@ -563,11 +580,5 @@ if __name__ == "__main__":
     while "closed" not in window_status:
         window_status = conn_recv.recv()
         print(f"got {window_status}", flush=True)
-
-    # Call the /cleanup endpoint
-    try:
-        response = requests.post(f"http://{server_ip}:{server_port}/cleanup")
-    except Exception as e:
-        print(f"Exception while calling cleanup endpoint: {e}")
 
     instance.stop()

@@ -1,4 +1,5 @@
 import subprocess
+import os
 import time
 from verification import Verification
 from numatoRelay import Relay
@@ -7,6 +8,10 @@ from node import Node, MaybeNode
 from abc import ABC, abstractmethod
 from models import SwitchState, Tree, T
 from keysight33622A import keysight33622A
+
+# Feature flags / environment configuration
+DEV_MODE = os.getenv("DEV_MODE", "true").lower() in ("1", "true", "yes", "on")
+FG_IP = os.getenv("FG_IP", "10.9.0.50")
 
 
 class PulseController(ABC):
@@ -177,10 +182,18 @@ class FunctionGeneratorPulseController(PulseController):
         )
         self.tree = T(tree_state=self.tree_state, activated_channel=0)
 
-        # self.fg = keysight33622A("10.9.0.50")
-        # self.fg.connect()
-        # self.fg.setup_pulse(width=0.2)
-        # self.fg.set_output(1, 1)
+        # Lazily configure the function generator unless in DEV_MODE
+        self.fg = None
+        if not DEV_MODE:
+            try:
+                self.fg = keysight33622A(FG_IP)
+                self.fg.connect()
+                self.fg.setup_pulse(width=0.2)
+                self.fg.set_output(1, 1)
+                print(f"Function generator initialized at {FG_IP}")
+            except Exception as e:
+                print(f"Failed to initialize function generator: {e}")
+                self.fg = None
 
         self.pulse_amplitude = pulse_amplitude
 
@@ -188,7 +201,13 @@ class FunctionGeneratorPulseController(PulseController):
         self.wire_switch(channel, verification)
         time.sleep(0.1)
         print("SENDING POSITIVE PULSE")
-        # self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
+        if self.fg:
+            self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
+        else:
+            if DEV_MODE:
+                print("DEV_MODE: skipping POS pulse trigger")
+            else:
+                print("Function generator unavailable: skipping POS pulse trigger")
         time.sleep(0.1)
 
         time.sleep(3)
@@ -197,7 +216,13 @@ class FunctionGeneratorPulseController(PulseController):
         self.wire_switch(channel, verification)
         time.sleep(0.1)
         print("SENDING NEGATIVE PULSE")
-        # self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")
+        if self.fg:
+            self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")
+        else:
+            if DEV_MODE:
+                print("DEV_MODE: skipping NEG pulse trigger")
+            else:
+                print("Function generator unavailable: skipping NEG pulse trigger")
         time.sleep(0.1)
         time.sleep(3)
 
@@ -245,5 +270,5 @@ class FunctionGeneratorPulseController(PulseController):
     def cleanup(self):
         self.relay_board.Reset()
         super().cleanup()
-        if self.fg:
+        if hasattr(self, "fg") and self.fg:
             self.fg.disconnect()
