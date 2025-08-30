@@ -10,7 +10,7 @@
   import { on } from "svelte/events";
 
   // using regular css because tailwind has limited support on older browsers
-  import "../dialog.css" 
+  import "../dialog.css";
 
   interface Props {
     isOpen: any;
@@ -34,9 +34,7 @@
   <Dialog.Portal>
     <Dialog.Overlay />
     <Dialog.Content>
-      <Dialog.Title>
-        Is the cryoamp turned on?
-      </Dialog.Title>
+      <Dialog.Title>Is the cryoamp turned on?</Dialog.Title>
       <!-- <Separator.Root /> -->
       <Dialog.Description>
         If the cryoamp is powered, triggering the switch will damage it.
@@ -64,4 +62,3 @@
     </Dialog.Content>
   </Dialog.Portal>
 </Dialog.Root>
-

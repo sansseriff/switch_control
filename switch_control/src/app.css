@@ -1,5 +1,5 @@
-/* @import "tailwindcss";
-@plugin "tailwindcss-animate"; */
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 body {
   padding: 0;
@@ -50,20 +50,19 @@ button,
   border: none;
 }
 
-
 :disabled {
   cursor: default;
 }
 
 /* @custom-variant dark (&:is(.dark *)); */
 
-/* @font-face {
+@font-face {
   font-family: "Cal Sans";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
   src: url("/CalSans-SemiBold.woff2") format("woff2");
-} */
+}
 
 :root {
   /* Colors */
@@ -344,7 +343,7 @@ button,
   }
 }
 
-/* @layer components {
+@layer components {
   *:not(body):not(.focus-override) {
     outline: none !important;
     &:focus-visible {
@@ -355,4 +354,4 @@ button,
   .link {
     @apply hover:text-foreground/80 focus-visible:ring-foreground focus-visible:ring-offset-background rounded-xs focus-visible:outline-hidden inline-flex items-center gap-1 font-medium underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-offset-2;
   }
-} */
+}

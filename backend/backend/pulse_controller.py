@@ -12,6 +12,7 @@ from keysight33622A import keysight33622A
 # Feature flags / environment configuration
 DEV_MODE = os.getenv("DEV_MODE", "true").lower() in ("1", "true", "yes", "on")
 FG_IP = os.getenv("FG_IP", "10.9.0.50")
+EXTRA_SLEEP_TIME = 0
 
 
 class PulseController(ABC):
@@ -210,7 +211,7 @@ class FunctionGeneratorPulseController(PulseController):
                 print("Function generator unavailable: skipping POS pulse trigger")
         time.sleep(0.1)
 
-        time.sleep(3)
+        time.sleep(EXTRA_SLEEP_TIME)
 
     def flip_right(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
@@ -224,7 +225,7 @@ class FunctionGeneratorPulseController(PulseController):
             else:
                 print("Function generator unavailable: skipping NEG pulse trigger")
         time.sleep(0.1)
-        time.sleep(3)
+        time.sleep(EXTRA_SLEEP_TIME)
 
     def wire_switch(self, channel: int, verification: Verification):
         """

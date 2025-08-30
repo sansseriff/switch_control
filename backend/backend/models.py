@@ -46,3 +46,10 @@ class ButtonLabelsBase(BaseModel):
     label_5: str = "Ch 6"
     label_6: str = "Ch 7"
     label_7: str = "Ch 8"
+
+
+class SettingsBase(BaseModel):
+    cryo_mode: bool = False
+    cryo_voltage: float = 2.5
+    regular_voltage: float = 5.0
+    tree_memory_mode: bool = False

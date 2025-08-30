@@ -47,3 +47,11 @@ export interface ButtonState {
   idx: number;
   value: boolean;
 }
+
+// Backend settings model
+export interface Settings {
+  cryo_mode: boolean;
+  cryo_voltage: number;
+  regular_voltage: number;
+  tree_memory_mode: boolean;
+}

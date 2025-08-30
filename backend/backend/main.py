@@ -44,6 +44,7 @@ from models import (
     SwitchState,
     Tree,
     T,
+    SettingsBase,
 )
 
 from typing import Any
@@ -61,6 +62,8 @@ from db import (
     ButtonLabels,
     InitResponse,
     InitResponsePublic,
+    Settings,
+    TreeState,
 )
 
 FUNCTION_GEN = True
@@ -186,7 +189,7 @@ mimetypes.init()
 PULSE_TIME = 50
 SLEEP_TIME = 0.050
 REMEMBER_STATE: bool = False
-FRAMELESS: bool = True
+FRAMELESS: bool = False
 
 
 # https://numato.com/docs/8-channel-usb-relay-module/
@@ -214,6 +217,7 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
         frameless=FRAMELESS,
         easy_drag=False,
     )
+    # webview.start(debug=True) # NOTE if this is activated, then you don't get graceful shutdown from hitting the close button. (on osx)
 
     # https://github.com/r0x0r/pywebview/issues/1496#issuecomment-2410471185
 
@@ -339,6 +343,27 @@ def update_color(cryo: CryoRelayManager):
     print("current output channel: ", T.activated_channel)
 
 
+def apply_tree_state_to_nodes(cryo: CryoRelayManager, tree_state: Tree):
+    """Set node polarities from a persisted Tree and refresh derived fields.
+    Does not pulse hardware; only updates in-memory structures.
+    """
+    mapping = {
+        "R1": cryo.R1,
+        "R2": cryo.R2,
+        "R3": cryo.R3,
+        "R4": cryo.R4,
+        "R5": cryo.R5,
+        "R6": cryo.R6,
+        "R7": cryo.R7,
+    }
+    for key, node in mapping.items():
+        state: SwitchState = getattr(tree_state, key)
+        node.polarity = bool(state.pos)
+    # recompute in_use flags and activated channel
+    update_color(cryo)
+    cryo.tree.tree_state = flatten_tree(cryo.top_node)
+
+
 def channel_to_state(
     channel: int,
     verification: Verification,
@@ -401,31 +426,71 @@ async def bad_request_handler(request: Request, exc: Any):
 
 @app.post("/reset")
 def reset(
-    verification: Verification, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+    verification: Verification,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+    session: DBSession,
 ):
-    return init_tree(verification, cryo)
+    state = init_tree(verification, cryo)
+    # persist
+    row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+    if not row:
+        row = TreeState(id=1)
+    row.tree_json = state.model_dump_json()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return state
 
 
 # Make sure the tree is in the correct state by re-submitting desired path
 @app.post("/re_assert")
 def re_assert(
-    verification: Verification, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+    verification: Verification,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+    session: DBSession,
 ):
-    return re_assert_tree(verification, cryo)
+    state = re_assert_tree(verification, cryo)
+    row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+    if not row:
+        row = TreeState(id=1)
+    row.tree_json = state.model_dump_json()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return state
 
 
 @app.post("/channel")
 def request_channel(
-    channel: Channel, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+    channel: Channel,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+    session: DBSession,
 ):
     print("cryo-channel requested: ", channel.number)
-    return channel_to_state(channel.number, channel.verification, cryo)
+    state = channel_to_state(channel.number, channel.verification, cryo)
+    # persist
+    if state is not None:
+        row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+        if not row:
+            row = TreeState(id=1)
+        row.tree_json = state.model_dump_json()
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+    return state
 
 
 @app.get("/tree")
 def get_tree(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
     # tree is always available after lifespan init
     return cryo.tree.tree_state
+
+@app.get("/tree/persisted", response_model=Tree)
+def get_persisted_tree(session: DBSession):
+    row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+    if not row or not row.tree_json:
+        raise HTTPException(status_code=404, detail="Persisted tree not found")
+    return Tree.model_validate_json(row.tree_json)
 
 
 @app.get("/initialize", response_model=InitResponsePublic)
@@ -436,11 +501,22 @@ async def initialize(
     Initializes the application state, including the tree state and button labels.
     """
     tree_state: Tree | None = None
-    labels: ButtonLabels | None = None  # Expecting the DB model
+    labels: ButtonLabels | None = None
+    settings: Settings | None = None
 
     try:
-        # Use the already initialized manager from lifespan
-        tree_state = cryo.tree.tree_state
+        # Load last saved tree state from DB (falls back to in-memory if missing)
+        row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+        if row and row.tree_json:
+            try:
+                tree_state = Tree.model_validate_json(row.tree_json)
+                # also apply to running manager
+                cryo.tree.tree_state = tree_state
+                apply_tree_state_to_nodes(cryo, tree_state)
+            except Exception:
+                tree_state = cryo.tree.tree_state
+        else:
+            tree_state = cryo.tree.tree_state
 
         # Fetch button labels from the database
         statement = select(ButtonLabels).where(ButtonLabels.id == 1)
@@ -452,6 +528,21 @@ async def initialize(
             print("Error: Button labels not found in DB during initialization.")
             raise HTTPException(status_code=500, detail="Button labels not found")
 
+        # Fetch settings from the database
+        settings_stmt = select(Settings).where(Settings.id == 1)
+        settings = session.exec(settings_stmt).one_or_none()
+        if not settings:
+            settings = Settings(id=1)
+            session.add(settings)
+            session.commit()
+            session.refresh(settings)
+
+        # Apply pulse amplitude based on cryo mode
+        if isinstance(cryo.pulse_controller, FunctionGeneratorPulseController):
+            cryo.pulse_controller.pulse_amplitude = (
+                settings.cryo_voltage if settings.cryo_mode else settings.regular_voltage
+            )
+
         if not tree_state:
             # Should not happen if initialization logic above worked
             print("Error: Tree state not available during initialization.")
@@ -462,7 +553,8 @@ async def initialize(
         # this should get filtered into InitResponsePublic
         return InitResponse(
             tree_state=tree_state,
-            button_labels=labels,  # Pass the validated public model instance
+            button_labels=labels,
+            settings=settings,
         )
 
     except Exception as e:
@@ -479,6 +571,56 @@ def get_button_labels(session: DBSession):
         raise HTTPException(status_code=404, detail="Button labels not found")
 
     return db_labels
+
+
+# Settings endpoints
+@app.get("/settings", response_model=SettingsBase)
+def get_settings(session: DBSession):
+    stmt = select(Settings).where(Settings.id == 1)
+    settings = session.exec(stmt).one_or_none()
+    if not settings:
+        settings = Settings(id=1)
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+    return settings
+
+
+@app.post("/settings", response_model=SettingsBase)
+def update_settings(
+    payload: SettingsBase,
+    session: DBSession,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+):
+    print("updating settings: ", payload)
+    stmt = select(Settings).where(Settings.id == 1)
+    settings = session.exec(stmt).one_or_none()
+
+    # Only include fields provided by the client (won't overwrite others)
+    data = payload.model_dump(exclude_unset=True)
+
+    if not settings:
+        # Create with provided data plus fixed id
+        settings = Settings(id=1, **data)
+    else:
+        # Update existing instance dynamically so new fields are picked up automatically
+        for key, value in data.items():
+            if key != "id":
+                setattr(settings, key, value)
+
+    session.add(settings)
+    session.commit()
+    session.refresh(settings)
+
+    print("after: ", settings)
+
+    # Apply to running controller
+    if isinstance(cryo.pulse_controller, FunctionGeneratorPulseController):
+        cryo.pulse_controller.pulse_amplitude = (
+            settings.cryo_voltage if settings.cryo_mode else settings.regular_voltage
+        )
+
+    return settings
 
 
 @app.post("/button_labels", response_model=ButtonLabelsBase)  # Use public model
@@ -514,7 +656,9 @@ def update_button_labels(
 
 @app.post("/switch")
 def toggle_switch(
-    toggle: ToggleRequest, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+    toggle: ToggleRequest,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+    session: DBSession,
 ):
     v: CryoRelayManager = cryo
 
@@ -534,7 +678,16 @@ def toggle_switch(
 
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
-    return v.tree.tree_state
+    state = v.tree.tree_state
+    # persist
+    row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+    if not row:
+        row = TreeState(id=1)
+    row.tree_json = state.model_dump_json()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return state
 
 
 def parse_arguments():

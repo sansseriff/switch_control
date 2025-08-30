@@ -1,9 +1,9 @@
-from typing import Annotated, Optional
+from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pydantic import BaseModel
-from models import ButtonLabelsBase, Tree
+from models import ButtonLabelsBase, Tree, SettingsBase, SwitchState
+import json
 
 # Define a base Pydantic model for the labels (used for request/response structure)
 
@@ -16,16 +16,40 @@ class ButtonLabels(SQLModel, ButtonLabelsBase, table=True):
 class InitializationResponse(BaseModel):
     tree_state: Tree
     button_labels: ButtonLabelsBase
+    settings: SettingsBase
 
 
 class InitResponse(BaseModel):
     tree_state: Tree
     button_labels: ButtonLabels
+    settings: SettingsBase
 
 
 class InitResponsePublic(BaseModel):
     tree_state: Tree
     button_labels: ButtonLabelsBase
+    settings: SettingsBase
+
+
+class Settings(SQLModel, SettingsBase, table=True):
+    id: Optional[int] = Field(default=1, primary_key=True)
+
+
+class TreeState(SQLModel, table=True):
+    """Persisted tree state stored as JSON for simplicity."""
+    id: Optional[int] = Field(default=1, primary_key=True)
+    tree_json: str = Field(default_factory=lambda: json.dumps(
+        Tree(
+            R1=SwitchState(pos=False, color=False),
+            R2=SwitchState(pos=False, color=False),
+            R3=SwitchState(pos=False, color=False),
+            R4=SwitchState(pos=False, color=False),
+            R5=SwitchState(pos=False, color=False),
+            R6=SwitchState(pos=False, color=False),
+            R7=SwitchState(pos=False, color=False),
+            activated_channel=0,
+        ).model_dump()
+    ))
 
 
 sqlite_file_name = "database.db"
@@ -56,3 +80,33 @@ def create_db_and_tables():
             session.add(default_labels)
             session.commit()
             print("Default button labels created.")
+
+        # Ensure the default settings row exists
+        statement = select(Settings).where(Settings.id == 1)
+        results = session.exec(statement)
+        db_settings = results.first()
+        if not db_settings:
+            default_settings = Settings(id=1)
+            session.add(default_settings)
+            session.commit()
+            print("Default settings created.")
+
+        # Ensure the default tree state row exists
+        statement = select(TreeState).where(TreeState.id == 1)
+        results = session.exec(statement)
+        db_tree = results.first()
+        if not db_tree:
+            default_tree = Tree(
+                R1=SwitchState(pos=False, color=False),
+                R2=SwitchState(pos=False, color=False),
+                R3=SwitchState(pos=False, color=False),
+                R4=SwitchState(pos=False, color=False),
+                R5=SwitchState(pos=False, color=False),
+                R6=SwitchState(pos=False, color=False),
+                R7=SwitchState(pos=False, color=False),
+                activated_channel=0,
+            )
+            db_tree = TreeState(id=1, tree_json=json.dumps(default_tree.model_dump()))
+            session.add(db_tree)
+            session.commit()
+            print("Default tree state created.")

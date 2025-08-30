@@ -1,22 +1,16 @@
 <script lang="ts">
-  import svelteLogo from "./assets/svelte.svg";
-  import viteLogo from "/vite.svg";
-  import Counter from "./lib/Counter.svelte";
-  // import { invoke } from "@tauri-apps/api";
-  import GeneralButton from "./lib/GeneralButton.svelte";
+  import { Gear } from "phosphor-svelte";
+  import { ClockCountdown } from "phosphor-svelte";
 
-  import TreeDiagram from "./lib/TreeDiagram.svelte";
-
-  import type { ButtonState, TreeState } from "./types";
   import { onMount } from "svelte";
-  import Menu from "./lib/Menu.svelte";
 
   import { tree } from "./state.svelte";
   import TreeAndButtons from "./lib/TreeAndButtons.svelte";
-  import { reAssert, initialize } from "./api";
-  import ProtectedButton from "./lib/ProtectedButton.svelte";
-  // console.log("import.meta.env.SKIP_LOADING ", import.meta.env.SKIP_LOADING);
+  import MenuDialog from "./lib/MenuDialog.svelte";
+  import TooltipIcon from "./lib/TooltipIcon.svelte";
+
   let isLoading = $state(import.meta.env.SKIP_LOADING !== "true");
+  let isMenuOpen = $state(false);
 
   onMount(async () => {
     // await new Promise((resolve) => setTimeout(resolve, 1));
@@ -33,15 +27,22 @@
 <main>
   <!-- <div class="top-bar pywebview-drag-region"></div>
   <div class="top-bar pywebview-drag-region"></div> -->
+  <div class="top-menu-section">
+    <TooltipIcon label={"settings here"} onclick={() => (isMenuOpen = true)}>
+      <Gear size={25} />
+    </TooltipIcon>
+    <TooltipIcon label={"label history"} onclick={() => {}}>
+      <ClockCountdown size={25} />
+    </TooltipIcon>
+  </div>
 
   <div class="main-content">
-    <!-- <div class="bg-red-100">Is tailwind working?</div> -->
     {#if isLoading}
       <div class="loading-screen">
         <p>Loading...</p>
       </div>
     {:else}
-      <div class="left">
+      <!-- <div class="left">
         <ProtectedButton
           onVerifiedClick={(v) => tree.reAssertTree(v)}
           width_rem={5.5}
@@ -54,15 +55,29 @@
         >
           Reset
         </ProtectedButton>
-      </div>
-      <div class="right">
+      </div> -->
+      <div class="rright">
         <div class="inside"><TreeAndButtons></TreeAndButtons></div>
       </div>
     {/if}
   </div>
+
+  <MenuDialog bind:isOpen={isMenuOpen} />
 </main>
 
 <style>
+  .top-menu-section {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0.6rem 0.3rem;
+    /* background-color: #f5f5f5; */
+    border-right: 1px solid #e2e2e2;
+    width: 2.8rem;
+    background-color: #fafafa;
+  }
+
   main {
     display: flex;
     flex-direction: column;
@@ -70,16 +85,13 @@
     height: 100%;
     margin: 0;
     padding: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: row;
+    background-color: white;
   }
 
-  /* .top-bar {
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 2.7rem;
-    background-color: #ffffff;
-    border-bottom: 1px solid rgb(237, 237, 237);
-  } */
+  /* icon-holder styles moved into TooltipIcon */
 
   .loading-screen {
     display: flex;
@@ -91,43 +103,16 @@
   .main-content {
     display: flex;
     flex-direction: row;
-    padding: 0;
-    margin-left: 0.5rem;
-    margin-right: 0.5rem;
-  }
-
-  .left {
-    background-color: white;
-    border-radius: 8px;
-    box-sizing: border-box;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-    align-items: center;
-    margin: 1rem;
-    margin-left: 0.5rem;
-    margin-right: 0.5rem;
-    border: 1px solid rgb(237, 237, 237);
-    flex: 5;
-  }
-
-  .right {
-    display: flex;
-    /* flex-direction: column; */
     justify-content: center;
     align-items: center;
-    /* padding-top: 0.1rem; */
-    border-radius: 8px;
-    /* padding-left: 3.7rem; */
-    padding: 1rem;
-    margin: 1rem;
-    margin-left: 0.5rem;
-    margin-right: 0.5rem;
-    border: 1px solid rgb(237, 237, 237);
+    padding: 0;
+    width: 100%;
     background-color: white;
+    padding: 3rem;
+  }
 
-    flex: 10;
+  .rright {
+    display: flex;
   }
 
   .inside {
@@ -140,26 +125,27 @@
   }
 
   /* Media query for smaller screens */
-  @media (max-width: 768px) {
+  @media (max-width: 500px) {
+    main {
+      flex-direction: column;
+      height: 100vh;
+    }
+
     .main-content {
       flex-direction: column;
       height: auto;
     }
 
-    .left {
+    .top-menu-section {
+      width: 100%;
       flex-direction: row;
-      margin-bottom: 0.5rem;
-      padding: 0.5rem;
-      gap: 1rem;
-      padding-top: 2rem;
-      padding-bottom: 2rem;
-    }
-
-    .right {
-      margin-top: 0.5rem;
-      width: auto;
-      padding-top: 2rem;
-      padding-bottom: 2rem;
+      padding: 0.3rem 0.3rem;
+      border-left: none;
+      border-bottom: 1px solid #e2e2e2;
+      height: 2.8rem;
+      padding-left: 0.6rem;
+      align-items: center;
+      justify-content: left;
     }
   }
 </style>

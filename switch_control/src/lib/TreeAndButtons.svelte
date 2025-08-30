@@ -19,6 +19,48 @@
 
   let button_mode = $state(true);
 
+  // Shared dynamic width (px) for inputs and buttons based on longest label
+  let computedWidthPx = $state(80); // fallback
+  let remPx = $state(16); // updated on mount from computed styles
+  let canvas: HTMLCanvasElement | null = null;
+
+  function getFontPx() {
+    // Match styles in inputs/buttons: font-size 0.875rem; font-weight 500; same family
+    return 0.875 * remPx;
+  }
+
+  function measureTextPx(text: string) {
+    if (!canvas) canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return 80;
+    ctx.font = `500 ${getFontPx()}px Arial, Helvetica, sans-serif`;
+    const m = ctx.measureText(text || "");
+    return m.width;
+  }
+
+  function getLabelAt(i: number): string {
+    const key = `label_${i}` as keyof ButtonLabelState;
+    // While editing, use proxy labels; otherwise use saved labels
+    const src = button_mode ? tree.button_labels : proxy_labels;
+    // Fall back to placeholder if empty
+    const v = (src[key] || "") as string;
+    return v.trim() !== "" ? v : getDefaultName(i);
+  }
+
+  function recomputeWidth() {
+    // Measure all 8 labels and take the longest
+    let maxPx = 0;
+    for (let i = 0; i < 8; i++) {
+      const w = measureTextPx(getLabelAt(i));
+      if (w > maxPx) maxPx = w;
+    }
+    // Add padding + borders to fit nicely (input has ~0.4rem padding + 3px border)
+    const padPx = 0.4 * remPx + 6; // ~padding + borders
+    // Minimum width roughly equivalent to previous 5rem default to avoid jitter
+    const minPx = 5 * remPx;
+    computedWidthPx = Math.max(minPx, Math.ceil(maxPx + padPx));
+  }
+
   function editChannelLabels() {
     // Initialize proxy labels with current labels when entering edit mode
     proxy_labels = { ...tree.button_labels };
@@ -76,10 +118,41 @@
 
   // Use tree.init() which now fetches both tree state and labels
   onMount(() => {
-    tree.init().catch((error) => {
-      console.error("Initialization failed:", error);
-      // Handle initialization error (e.g., show message to user)
-    });
+    // Capture current root rem size for accurate px calculations
+    const rs = getComputedStyle(document.documentElement).fontSize;
+    const parsed = parseFloat(rs);
+    if (!Number.isNaN(parsed)) remPx = parsed;
+    // Initial width computation
+    recomputeWidth();
+    // Recompute on resize to track OS/browser zoom or root font changes
+    const onResize = () => {
+      const rs2 = getComputedStyle(document.documentElement).fontSize;
+      const p2 = parseFloat(rs2);
+      if (!Number.isNaN(p2)) remPx = p2;
+      recomputeWidth();
+    };
+    window.addEventListener("resize", onResize);
+    tree
+      .init()
+      .catch((error) => {
+        console.error("Initialization failed:", error);
+        // Handle initialization error (e.g., show message to user)
+      })
+      .finally(() => {
+        // After init sets labels/state, recompute to match actual labels
+        recomputeWidth();
+      });
+
+    return () => window.removeEventListener("resize", onResize);
+  });
+
+  // Recompute width reactively on label or mode changes
+  $effect(() => {
+    // depend on these to trigger effect
+    tree.button_labels; // saved labels
+    proxy_labels; // editing labels
+    button_mode;
+    recomputeWidth();
   });
 
   // Helper to get the default name based on index
@@ -98,7 +171,7 @@
           <ProtectedButton
             onVerifiedClick={(verification) =>
               tree.toChannel(idx, verification)}
-            width_rem={5}
+            width_rem={computedWidthPx / remPx}
             highlighted={tree.button_colors[idx]}
           >
             <!-- Display label from global state -->
@@ -113,6 +186,7 @@
             size="10"
             placeholder={getDefaultName(idx)}
             bind:value={proxy_labels[labelKey]}
+            style={`width: ${computedWidthPx}px`}
           />
         {/if}
       </div>
