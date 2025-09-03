@@ -271,7 +271,9 @@
   .container {
     display: flex;
     /* flex-direction: row; */
-
+    /* justify-content: center;
+    align-items: center; */
+    justify-content: center;
     margin: auto;
     height: 315px;
   }
