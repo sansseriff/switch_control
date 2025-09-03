@@ -42,6 +42,20 @@ class PulseController(ABC):
     def flip_right(self, channel: int, verification: Verification):
         pass
 
+    @abstractmethod
+    def cryo_mode(self):
+        """
+        Set the pulse controller to cryogenic mode.
+        """
+        pass
+    
+    @abstractmethod
+    def room_temp_mode(self):
+        """
+        Set the pulse controller to room temperature mode.
+        """
+        pass
+
     def initialize_relay(self):
         relay_board = None  # Initialize with a default value
         serial_ports = get_serial_ports()
@@ -116,6 +130,13 @@ class SimpleRelayPulseController(PulseController):
         time.sleep(self.sleep_time)
 
 
+    def cryo_mode(self):
+        pass
+    
+    def room_temp_mode(self):
+        pass
+
+
 class FunctionGeneratorPulseController(PulseController):
     """
     A PulseController that uses a function generator to send voltage pulses to the
@@ -126,7 +147,8 @@ class FunctionGeneratorPulseController(PulseController):
         self,
         sleep_time: float = 0.050,
         pulse_time: float = 50,
-        pulse_amplitude: float = 2.0,
+        pulse_amplitude: float = 2.5,
+        use_client: bool = True,
     ):
         super().__init__(sleep_time, pulse_time)
 
@@ -141,6 +163,7 @@ class FunctionGeneratorPulseController(PulseController):
         self.nodes = [Node(f"R{i}") for i in range(1, 7)]
         self.R1, self.R2, self.R3, self.R4, self.R5, self.R6 = self.nodes
         self.top_node: MaybeNode = self.R1
+        self.use_client = use_client
 
         # using room temp relays for wire switching
         #
@@ -183,24 +206,40 @@ class FunctionGeneratorPulseController(PulseController):
         )
         self.tree = T(tree_state=self.tree_state, activated_channel=0)
 
-        # Lazily configure the function generator unless in DEV_MODE
-        self.fg = None
-        if not DEV_MODE:
-            try:
-                self.fg = keysight33622A(FG_IP)
-                self.fg.connect()
-                self.fg.setup_pulse(width=0.2)
-                self.fg.set_output(1, 1)
-                print(f"Function generator initialized at {FG_IP}")
-            except Exception as e:
-                print(f"Failed to initialize function generator: {e}")
-                self.fg = None
+
+        # on cats control computer, this is a static IP address reservation. 
+        # using 'dhcpd-server' running on this computer.
+        # see status of dhcpd server with: sudo systemctl status dhcpd
+        # edit the config file for the dhcpd server with: sudo nano /etc/dhcp/dhcpd.conf
+
+        # function generator, used for sending pulses
+
+        if self.use_client:
+            # Use client connection via TCP server
+            from client_keysight33622A import ClientKeysight33622A
+            self.fg = ClientKeysight33622A()
+        else:
+            # Use direct VISA connection
+            self.fg = keysight33622A("10.9.0.18")
+
+
+        # self.fg = keysight33622A("10.9.0.18")
+        self.fg.connect()
+        self.fg.setup_pulse(width=0.050) # 50 ms
+        self.fg.set_output(1, 1)
 
         self.pulse_amplitude = pulse_amplitude
 
+
+    def cryo_mode(self):
+        self.pulse_amplitude = 2.5
+        
+    def room_temp_mode(self):
+        self.pulse_amplitude = 5.0
+
     def flip_left(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
-        time.sleep(0.1)
+        time.sleep(0.15)
         print("SENDING POSITIVE PULSE")
         if self.fg:
             self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
@@ -215,7 +254,7 @@ class FunctionGeneratorPulseController(PulseController):
 
     def flip_right(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
-        time.sleep(0.1)
+        time.sleep(0.15)
         print("SENDING NEGATIVE PULSE")
         if self.fg:
             self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")

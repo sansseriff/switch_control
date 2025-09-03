@@ -29,7 +29,7 @@ from fastapi import HTTPException
 # from multiprocessing.synchronize import Event as EventType
 import argparse
 
-import AppKit # type: ignore
+# import AppKit
 
 from pulse_controller import (
     PulseController,
@@ -47,8 +47,9 @@ from models import (
     SettingsBase,
 )
 
-from typing import Any
 
+from ampProtector import AmpProtector
+from typing import Any
 
 # print("THISS: ", THISS)
 from location import WEB_DIR
@@ -130,6 +131,14 @@ class CryoRelayManager:
         )
         self.tree = T(tree_state=self.tree_state, activated_channel=0)
 
+
+        # if this is enabled, and the supply is not connected, 
+        # you'll get an indecipherable error
+        # I have another program that accesses the keysight supply at the 
+        # same time. Using sockets and a client connection to allow
+        # multiple python processes to access the VISA device
+        self.amp_protector = AmpProtector(on=True, disabled=False, use_client=True)
+
     def cleanup(self):
         self.pulse_controller.cleanup()
 
@@ -196,12 +205,12 @@ FRAMELESS: bool = False
 # OSX: ls /dev/*usb*
 
 
-def add_buttons(window: webview.Window): 
-    window.native.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(False)  # type: ignore
-    window.native.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(  # type: ignore
-        False
-    )
-    window.native.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(False)  # type: ignore
+# def add_buttons(window: webview.Window):
+#     window.native.standardWindowButton_(AppKit.NSWindowCloseButton).setHidden_(False)  # type: ignore
+#     window.native.standardWindowButton_(AppKit.NSWindowMiniaturizeButton).setHidden_(  # type: ignore
+#         False
+#     )
+#     window.native.standardWindowButton_(AppKit.NSWindowZoomButton).setHidden_(False)  # type: ignore
 
 
 def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
@@ -221,8 +230,8 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
 
     # https://github.com/r0x0r/pywebview/issues/1496#issuecomment-2410471185
 
-    if FRAMELESS:
-        win.events.before_load += add_buttons
+    # if FRAMELESS:
+    #     win.events.before_load += add_buttons
     win.events.closed += on_closed
     print("debug is: ", debug)
     webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
@@ -288,24 +297,29 @@ def flatten_tree(root: MaybeNode) -> Tree:
 def init_tree(verification: Verification, cryo: CryoRelayManager):
     v: CryoRelayManager = cryo
 
+    v.amp_protector.turn_off_amp()
+
     # v.pulse_controller.turn_on(0, verification)
     with v.lock:
         for node in v.nodes:
             # time.sleep(SLEEP_TIME)
             node.polarity = False
             idx = int(node.relay_index)
-            v.pulse_controller.flip_right(idx, verification)
+            v.pulse_controller.flip_left(idx, verification)
 
     # app.state.v.switch.turn_off(0, verification)
 
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
 
+    v.amp_protector.turn_on_if_previously_on()
+
     return v.tree.tree_state
 
 
 def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
     v: CryoRelayManager = cryo
+    v.amp_protector.turn_off_amp()
     current_node = v.top_node
 
     with v.lock:
@@ -321,6 +335,7 @@ def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
 
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
+    v.amp_protector.turn_on_if_previously_on()
 
     return v.tree.tree_state
 
@@ -373,6 +388,9 @@ def channel_to_state(
     take in user-numbering channel (1-8)
     """
     v: CryoRelayManager = cryo
+    v.amp_protector.turn_off_amp()
+
+
     if channel < 0 or channel > 7:
         print("Invalid channel number, stopping.")
         return
@@ -385,28 +403,30 @@ def channel_to_state(
     binary = binary.zfill(3)
     current_node = v.top_node
 
-    with v.lock:
-        for bit in enumerate(binary):
-            print(bit[1])
-            if not isinstance(current_node, Node):
-                print("Reached a None or end node, stopping.")
-                return
-            time.sleep(SLEEP_TIME)
-            if bit[1] == "0":
-                if (not current_node.polarity) or (not REMEMBER_STATE):
-                    current_node.polarity = True
-                    idx = int(current_node.relay_index)
-                    print(f"flip cryo relay {current_node.relay_index} left")
-                    v.pulse_controller.flip_left(idx, verification)
-            else:
-                if (current_node.polarity) or (not REMEMBER_STATE):
-                    print(f"flip cryo relay {current_node.relay_index} right")
-                    current_node.polarity = False
-                    idx = int(current_node.relay_index)
-                    v.pulse_controller.flip_right(idx, verification)
-            current_node = current_node.to_next()
+    for bit in enumerate(binary):
+        print(bit[1])
+        if type(current_node) is not Node:
+            print("Reached a None or end node, stopping.")
+            return
+        time.sleep(SLEEP_TIME)
+        if bit[1] == "0":
+            if (not current_node.polarity) or (not REMEMBER_STATE):
+                current_node.polarity = True
+                idx = int(current_node.relay_index)
+                print(f"flip cryo relay {current_node.relay_index} left")
+                v.pulse_controller.flip_right(idx, verification)
+        else:
+            if (current_node.polarity) or (not REMEMBER_STATE):
+                print(f"flip cryo relay {current_node.relay_index} right")
+                current_node.polarity = False
+                idx = int(current_node.relay_index)
+                v.pulse_controller.flip_left(idx, verification)
+        current_node = current_node.to_next()
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
+
+    v.amp_protector.turn_on_if_previously_on()
+
     return v.tree.tree_state
 
 
@@ -654,6 +674,27 @@ def update_button_labels(
     return db_labels
 
 
+# auto-shutoff amps when showing the warning dialog
+@app.get("/preemptive_amp_shutoff")
+def preemptive_amp_shutoff(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
+    v: CryoRelayManager = cryo
+    v.amp_protector.turn_off_amp()
+
+
+    return v.tree.tree_state
+
+@app.get("/cryo_mode")
+def set_cryo_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
+    v: CryoRelayManager = cryo
+    v.pulse_controller.cryo_mode()
+
+@app.get("/room_temp_mode")
+def set_room_temp_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
+    v: CryoRelayManager = cryo
+    v.pulse_controller.room_temp_mode()
+
+
+
 @app.post("/switch")
 def toggle_switch(
     toggle: ToggleRequest,
@@ -662,32 +703,39 @@ def toggle_switch(
 ):
     v: CryoRelayManager = cryo
 
+    v.amp_protector.turn_off_amp()
+
     sw = v.nodes[toggle.number - 1]
     # print("the switch to toggle: ", sw.relay_name)
-
     with v.lock:
-        if not sw.polarity:
-            sw.polarity = True
+        if sw.polarity:
             idx = int(sw.relay_index)
             v.pulse_controller.flip_left(idx, toggle.verification)
+            sw.polarity = False
 
         else:
-            sw.polarity = False
             idx = int(sw.relay_index)
             v.pulse_controller.flip_right(idx, toggle.verification)
+            sw.polarity = True
 
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
-    state = v.tree.tree_state
-    # persist
-    row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
-    if not row:
-        row = TreeState(id=1)
-    row.tree_json = state.model_dump_json()
-    session.add(row)
-    session.commit()
-    session.refresh(row)
-    return state
+
+    v.amp_protector.turn_on_if_previously_on()
+    return v.tree.tree_state
+
+
+@app.post("/cleanup")
+async def cleanup():
+    v: CryoRelayManager = app.state.v
+    try:
+        if app.state and v:
+            v.cleanup()
+            print("Cleanup done")
+        return {"ok": True}
+    except Exception as e:
+        print(f"Cleanup failed: {e}")
+        raise HTTPException(status_code=500, detail="Cleanup failed")
 
 
 def parse_arguments():

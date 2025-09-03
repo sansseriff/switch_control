@@ -28,6 +28,7 @@ class visaInst:
             print("Connected to offline instrument " + str(self.__class__))
             return True
         rm = pyvisa.ResourceManager("@py")
+
         self.inst = rm.open_resource(
             "TCPIP::" + self.ipAddress + "::" + str(self.port) + "::SOCKET"
         )

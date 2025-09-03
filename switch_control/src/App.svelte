@@ -81,12 +81,14 @@
     {:else}
       <!-- <div class="left">
         <ProtectedButton
+          onInitialClick={() => tree.preemptiveAmpShutoff()}
           onVerifiedClick={(v) => tree.reAssertTree(v)}
           width_rem={5.5}
         >
           ReAssert
         </ProtectedButton>
         <ProtectedButton
+          onInitialClick={() => tree.preemptiveAmpShutoff()}
           onVerifiedClick={(v) => tree.resetTree(v)}
           width_rem={5.5}
         >

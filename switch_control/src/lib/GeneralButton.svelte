@@ -44,7 +44,7 @@
     border-radius: 0.25rem;
     height: 1.7rem;
 
-    /* width: 6.5rem; */
+    width: 10rem;
     text-align: center;
     font-family: Arial, Helvetica, sans-serif;
   }
