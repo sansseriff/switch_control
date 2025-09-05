@@ -53,3 +53,20 @@ class SettingsBase(BaseModel):
     cryo_voltage: float = 2.5
     regular_voltage: float = 5.0
     tree_memory_mode: bool = False
+    # Pulse generator persistence/config
+    pulse_generator_kind: str = "dev"  # one of: dev | keysight | client
+    pulse_generator_ip: Optional[str] = None
+
+
+# Pulse generator API models
+class PulseGenRequest(BaseModel):
+    kind: str
+    ip: Optional[str] = None
+
+
+class PulseGenInfo(BaseModel):
+    requested_kind: Optional[str] = None
+    requested_ip: Optional[str] = None
+    active_kind: str
+    created: bool = True
+    message: Optional[str] = None

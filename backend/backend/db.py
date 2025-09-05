@@ -2,7 +2,7 @@ from typing import Optional
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pydantic import BaseModel
-from models import ButtonLabelsBase, Tree, SettingsBase, SwitchState
+from models import ButtonLabelsBase, Tree, SettingsBase, SwitchState, PulseGenInfo
 import json
 
 # Define a base Pydantic model for the labels (used for request/response structure)
@@ -17,18 +17,21 @@ class InitializationResponse(BaseModel):
     tree_state: Tree
     button_labels: ButtonLabelsBase
     settings: SettingsBase
+    pulse_generator: PulseGenInfo
 
 
 class InitResponse(BaseModel):
     tree_state: Tree
     button_labels: ButtonLabels
     settings: SettingsBase
+    pulse_generator: PulseGenInfo
 
 
 class InitResponsePublic(BaseModel):
     tree_state: Tree
     button_labels: ButtonLabelsBase
     settings: SettingsBase
+    pulse_generator: PulseGenInfo
 
 
 class Settings(SQLModel, SettingsBase, table=True):

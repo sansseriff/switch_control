@@ -35,6 +35,7 @@ from pulse_controller import (
     PulseController,
     SimpleRelayPulseController,
     FunctionGeneratorPulseController,
+    make_pulse_generator,
 )
 from node import Node, MaybeNode
 from models import (
@@ -45,11 +46,14 @@ from models import (
     Tree,
     T,
     SettingsBase,
+    PulseGenRequest,
+    PulseGenInfo,
 )
 
 
 from ampProtector import AmpProtector
 from typing import Any
+from pydantic import BaseModel
 
 # print("THISS: ", THISS)
 from location import WEB_DIR
@@ -137,7 +141,7 @@ class CryoRelayManager:
         # I have another program that accesses the keysight supply at the 
         # same time. Using sockets and a client connection to allow
         # multiple python processes to access the VISA device
-        self.amp_protector = AmpProtector(on=True, disabled=False, use_client=True)
+        self.amp_protector = AmpProtector(on=True, disabled=True, use_client=True)
 
     def cleanup(self):
         self.pulse_controller.cleanup()
@@ -191,6 +195,11 @@ def get_services(request: Request) -> Services:
 
 def get_cryo(services: Annotated[Services, Depends(get_services)]) -> CryoRelayManager:
     return services.cryo
+
+
+class PulseGenResponse(BaseModel):
+    ok: bool
+    info: PulseGenInfo
 
 
 mimetypes.init()
@@ -563,6 +572,9 @@ async def initialize(
                 settings.cryo_voltage if settings.cryo_mode else settings.regular_voltage
             )
 
+        # Ensure pulse generator matches persisted settings with fallback
+        pulse_info = _ensure_pulse_generator(settings, cryo, session)
+
         if not tree_state:
             # Should not happen if initialization logic above worked
             print("Error: Tree state not available during initialization.")
@@ -575,6 +587,7 @@ async def initialize(
             tree_state=tree_state,
             button_labels=labels,
             settings=settings,
+            pulse_generator=pulse_info,
         )
 
     except Exception as e:
@@ -692,6 +705,88 @@ def set_cryo_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
 def set_room_temp_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
     v: CryoRelayManager = cryo
     v.pulse_controller.room_temp_mode()
+
+
+@app.post("/pulse_generator", response_model=PulseGenResponse)
+def switch_pulse_generator(
+    payload: PulseGenRequest, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+):
+    """Switch the active PulseGenerator implementation at runtime.
+
+    Body:
+    { "kind": "dev" | "keysight" | "client", "ip": "10.9.0.18" }
+    """
+    v: CryoRelayManager = cryo
+    if not isinstance(v.pulse_controller, FunctionGeneratorPulseController):
+        raise HTTPException(
+            status_code=400,
+            detail="Active PulseController does not support external pulse generators",
+        )
+
+    try:
+        # Update settings in DB and apply with fallback
+        session: Session = next(get_session())
+        settings = session.exec(select(Settings).where(Settings.id == 1)).one_or_none()
+        if not settings:
+            settings = Settings(id=1)
+        settings.pulse_generator_kind = payload.kind
+        settings.pulse_generator_ip = payload.ip
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+        info = _ensure_pulse_generator(settings, v, session)
+        return PulseGenResponse(ok=True, info=info)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to switch generator: {e}")
+
+
+def _ensure_pulse_generator(
+    settings: Settings, cryo: CryoRelayManager, session: Session
+) -> PulseGenInfo:
+    """Ensure the FunctionGeneratorPulseController has the generator from settings.
+    Fall back to dev on failure. Persist the effective kind back to settings if needed.
+    """
+    v = cryo
+    requested_kind = (settings.pulse_generator_kind or "dev").lower()
+    requested_ip = settings.pulse_generator_ip
+    created = True
+    message = None
+
+    if not isinstance(v.pulse_controller, FunctionGeneratorPulseController):
+        return PulseGenInfo(
+            requested_kind=requested_kind,
+            requested_ip=requested_ip,
+            active_kind="simple-relay",
+            created=True,
+            message="Simple relay controller in use; no external generator",
+        )
+
+    try:
+        gen = make_pulse_generator(requested_kind, requested_ip)
+        v.pulse_controller.set_generator(gen)
+        active_kind = requested_kind
+    except Exception as e:
+        # Fallback
+        created = False
+        message = f"Falling back to dev generator: {e}"
+        gen = make_pulse_generator("dev", None)
+        v.pulse_controller.set_generator(gen)
+        active_kind = "dev"
+
+    # Persist the active kind in settings if it changed
+    if settings.pulse_generator_kind != active_kind:
+        settings.pulse_generator_kind = active_kind
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+
+    return PulseGenInfo(
+        requested_kind=requested_kind,
+        requested_ip=requested_ip,
+        active_kind=active_kind,
+        created=created,
+        message=message,
+    )
 
 
 

@@ -7,12 +7,117 @@ from node import Node, MaybeNode
 
 from abc import ABC, abstractmethod
 from models import SwitchState, Tree, T
-from keysight33622A import keysight33622A
 
-# Feature flags / environment configuration
-DEV_MODE = os.getenv("DEV_MODE", "true").lower() in ("1", "true", "yes", "on")
+# Environment configuration
 FG_IP = os.getenv("FG_IP", "10.9.0.50")
 EXTRA_SLEEP_TIME = 0
+
+
+class PulseGenerator(ABC):
+    """
+    Abstract interface for any pulse generator used by FunctionGeneratorPulseController.
+
+    Concrete implementations must hide the connection details (local VISA, client socket, or dev mock).
+    """
+
+    @abstractmethod
+    def connect(self) -> None:
+        pass
+
+    @abstractmethod
+    def disconnect(self) -> None:
+        pass
+
+    @abstractmethod
+    def setup_pulse(self, width: float) -> None:
+        """Configure the pulse width (seconds)."""
+        pass
+
+    @abstractmethod
+    def set_output(self, channel: int, enabled: int | bool) -> None:
+        pass
+
+    @abstractmethod
+    def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+        """
+        Trigger a single pulse on the given channel with amplitude (Volts) and polarity 'POS'|'NEG'.
+        """
+        pass
+
+
+class DevModePulseGenerator(PulseGenerator):
+    """A no-op pulse generator for development that logs calls instead of talking to hardware."""
+
+    def __init__(self, name: str = "DevPulseGen"):
+        self.name = name
+        self.connected = False
+
+    def connect(self) -> None:
+        self.connected = True
+        print(f"[{self.name}] connect() -> OK (mock)")
+
+    def disconnect(self) -> None:
+        self.connected = False
+        print(f"[{self.name}] disconnect() -> OK (mock)")
+
+    def setup_pulse(self, width: float) -> None:
+        print(f"[{self.name}] setup_pulse(width={width})")
+
+    def set_output(self, channel: int, enabled: int | bool) -> None:
+        print(f"[{self.name}] set_output(channel={channel}, enabled={int(bool(enabled))})")
+
+    def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+        print(f"[{self.name}] trigger_with_polarity(channel={channel}, amplitude={amplitude}, polarity={polarity})")
+
+
+class KeysightPulseGenerator(PulseGenerator):
+    """Adapter around a direct VISA Keysight 33622A connection."""
+
+    def __init__(self, ip: str):
+        # Lazy import to avoid import errors when module not available
+        from keysight33622A import keysight33622A  # type: ignore
+
+        self.ip = ip
+        self._impl = keysight33622A(ip)
+
+    def connect(self) -> None:
+        self._impl.connect()
+
+    def disconnect(self) -> None:
+        self._impl.disconnect()
+
+    def setup_pulse(self, width: float) -> None:
+        self._impl.setup_pulse(width=width)
+
+    def set_output(self, channel: int, enabled: int | bool) -> None:
+        self._impl.set_output(channel, int(bool(enabled)))
+
+    def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+        self._impl.trigger_with_polarity(channel, amplitude, polarity)
+
+
+class ClientKeysightPulseGenerator(PulseGenerator):
+    """Adapter around client socket connection to a Keysight 33622A (shared VISA via server)."""
+
+    def __init__(self):
+        from client_keysight33622A import ClientKeysight33622A  # type: ignore
+
+        self._impl = ClientKeysight33622A()
+
+    def connect(self) -> None:
+        self._impl.connect()
+
+    def disconnect(self) -> None:
+        self._impl.disconnect()
+
+    def setup_pulse(self, width: float) -> None:
+        self._impl.setup_pulse(width=width)
+
+    def set_output(self, channel: int, enabled: int | bool) -> None:
+        self._impl.set_output(channel, int(bool(enabled)))
+
+    def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+        self._impl.trigger_with_polarity(channel, amplitude, polarity)
 
 
 class PulseController(ABC):
@@ -148,7 +253,7 @@ class FunctionGeneratorPulseController(PulseController):
         sleep_time: float = 0.050,
         pulse_time: float = 50,
         pulse_amplitude: float = 2.5,
-        use_client: bool = True,
+        generator: PulseGenerator | None = None,
     ):
         super().__init__(sleep_time, pulse_time)
 
@@ -163,7 +268,11 @@ class FunctionGeneratorPulseController(PulseController):
         self.nodes = [Node(f"R{i}") for i in range(1, 7)]
         self.R1, self.R2, self.R3, self.R4, self.R5, self.R6 = self.nodes
         self.top_node: MaybeNode = self.R1
-        self.use_client = use_client
+
+        # pulse generator abstraction
+        self.fg: PulseGenerator = (
+            generator if generator is not None else DevModePulseGenerator()
+        )
 
         # using room temp relays for wire switching
         #
@@ -206,27 +315,13 @@ class FunctionGeneratorPulseController(PulseController):
         )
         self.tree = T(tree_state=self.tree_state, activated_channel=0)
 
-
-        # on cats control computer, this is a static IP address reservation. 
+        # on cats control computer, this is a static IP address reservation.
         # using 'dhcpd-server' running on this computer.
         # see status of dhcpd server with: sudo systemctl status dhcpd
         # edit the config file for the dhcpd server with: sudo nano /etc/dhcp/dhcpd.conf
 
         # function generator, used for sending pulses
-
-        if self.use_client:
-            # Use client connection via TCP server
-            from client_keysight33622A import ClientKeysight33622A
-            self.fg = ClientKeysight33622A()
-        else:
-            # Use direct VISA connection
-            self.fg = keysight33622A("10.9.0.18")
-
-
-        # self.fg = keysight33622A("10.9.0.18")
-        self.fg.connect()
-        self.fg.setup_pulse(width=0.050) # 50 ms
-        self.fg.set_output(1, 1)
+        self._connect_and_setup_generator(self.fg)
 
         self.pulse_amplitude = pulse_amplitude
 
@@ -237,17 +332,29 @@ class FunctionGeneratorPulseController(PulseController):
     def room_temp_mode(self):
         self.pulse_amplitude = 5.0
 
+    def set_generator(self, generator: PulseGenerator):
+        """Swap the active pulse generator at runtime."""
+        try:
+            if hasattr(self, "fg") and self.fg:
+                self.fg.disconnect()
+        except Exception as e:
+            print(f"Warning: previous generator disconnect failed: {e}")
+        self.fg = generator
+        self._connect_and_setup_generator(self.fg)
+
+    def _connect_and_setup_generator(self, generator: PulseGenerator):
+        try:
+            generator.connect()
+            generator.setup_pulse(width=0.050)  # 50 ms
+            generator.set_output(1, 1)
+        except Exception as e:
+            print(f"Failed to initialize pulse generator: {e}")
+
     def flip_left(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
         time.sleep(0.15)
         print("SENDING POSITIVE PULSE")
-        if self.fg:
-            self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
-        else:
-            if DEV_MODE:
-                print("DEV_MODE: skipping POS pulse trigger")
-            else:
-                print("Function generator unavailable: skipping POS pulse trigger")
+        self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
         time.sleep(0.1)
 
         time.sleep(EXTRA_SLEEP_TIME)
@@ -256,13 +363,7 @@ class FunctionGeneratorPulseController(PulseController):
         self.wire_switch(channel, verification)
         time.sleep(0.15)
         print("SENDING NEGATIVE PULSE")
-        if self.fg:
-            self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")
-        else:
-            if DEV_MODE:
-                print("DEV_MODE: skipping NEG pulse trigger")
-            else:
-                print("Function generator unavailable: skipping NEG pulse trigger")
+        self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")
         time.sleep(0.1)
         time.sleep(EXTRA_SLEEP_TIME)
 
@@ -311,4 +412,29 @@ class FunctionGeneratorPulseController(PulseController):
         self.relay_board.Reset()
         super().cleanup()
         if hasattr(self, "fg") and self.fg:
-            self.fg.disconnect()
+            try:
+                self.fg.disconnect()
+            except Exception as e:
+                print(f"Warning: pulse generator disconnect failed: {e}")
+
+
+# Registry and factory for runtime switching
+PULSE_GENERATOR_REGISTRY: dict[str, type[PulseGenerator]] = {
+    "dev": DevModePulseGenerator,
+    "keysight": KeysightPulseGenerator,
+    "client": ClientKeysightPulseGenerator,
+}
+
+
+def make_pulse_generator(kind: str, ip: str | None = None) -> PulseGenerator:
+    key = kind.lower().strip()
+    if key not in PULSE_GENERATOR_REGISTRY:
+        raise ValueError(f"Unknown pulse generator kind: {kind}")
+    cls = PULSE_GENERATOR_REGISTRY[key]
+    # Handle constructor signatures
+    if cls is KeysightPulseGenerator:
+        if not ip:
+            # fall back to environment-provided IP or default
+            ip = os.getenv("KEYSIGHT_33622A_IP", "10.9.0.18")
+        return KeysightPulseGenerator(ip)
+    return cls()  # type: ignore[call-arg]

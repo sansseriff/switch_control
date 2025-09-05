@@ -17,11 +17,11 @@
   // Reactive proxy names for editing mode
   let proxy_labels = $state({ ...tree.button_labels });
 
-  let button_mode = $state(true);
+  // let button_mode = $state(true);
 
   // Shared dynamic width (px) for inputs and buttons based on longest label
   let computedWidthPx = $state(80); // fallback
-  let remPx = $state(16); // updated on mount from computed styles
+  let remPx = $state(32); // updated on mount from computed styles
   let canvas: HTMLCanvasElement | null = null;
 
   function getFontPx() {
@@ -41,7 +41,7 @@
   function getLabelAt(i: number): string {
     const key = `label_${i}` as keyof ButtonLabelState;
     // While editing, use proxy labels; otherwise use saved labels
-    const src = button_mode ? tree.button_labels : proxy_labels;
+    const src = tree.button_mode ? tree.button_labels : proxy_labels;
     // Fall back to placeholder if empty
     const v = (src[key] || "") as string;
     return v.trim() !== "" ? v : getDefaultName(i);
@@ -64,7 +64,7 @@
   function editChannelLabels() {
     // Initialize proxy labels with current labels when entering edit mode
     proxy_labels = { ...tree.button_labels };
-    button_mode = false;
+    tree.button_mode = false;
   }
 
   function defaultChannelLabels() {
@@ -81,7 +81,7 @@
     };
     proxy_labels = { ...defaultLabels }; // Update local edit state
     tree.saveButtonLabels(defaultLabels); // Save to backend and update global state
-    button_mode = true; // Exit edit mode
+    tree.button_mode = true; // Exit edit mode
   }
 
   function clearAll() {
@@ -112,7 +112,7 @@
     } else {
       // Save the edited labels from proxy_labels
       tree.saveButtonLabels(labelsToSave);
-      button_mode = true; // Exit edit mode
+      tree.button_mode = true; // Exit edit mode
     }
   }
 
@@ -151,7 +151,7 @@
     // depend on these to trigger effect
     tree.button_labels; // saved labels
     proxy_labels; // editing labels
-    button_mode;
+    tree.button_mode;
     recomputeWidth();
   });
 
@@ -161,56 +161,66 @@
   }
 </script>
 
-<div class="container">
-  <div class="tree"><TreeDiagram tree_state={tree.st} /></div>
-  <div class="buttons">
-    {#each { length: 8 } as _, idx}
-      {@const labelKey = `label_${idx}` as keyof ButtonLabelState}
-      <div class="spacer">
-        {#if button_mode}
-          <ProtectedButton
-            onInitialClick={() => tree.preemptiveAmpShutoff()}
-            onVerifiedClick={(verification) =>
-              tree.toChannel(idx, verification)}
-            width_rem={computedWidthPx / remPx}
-            highlighted={tree.button_colors[idx]}
-          >
-            <!-- Display label from global state -->
-            {tree.button_labels[labelKey]}
-          </ProtectedButton>
-        {:else}
-          <input
-            class="light"
-            type="text"
-            id={`name-${idx}`}
-            name={`name-${idx}`}
-            size="10"
-            placeholder={getDefaultName(idx)}
-            bind:value={proxy_labels[labelKey]}
-            style={`width: ${computedWidthPx}px`}
-          />
-        {/if}
-      </div>
-    {/each}
-  </div>
-  <!-- ... rest of the component ... -->
-  <div class="button-spacer">
-    <DotMenu {editChannelLabels} {defaultChannelLabels}></DotMenu>
-    {#if !button_mode}
-      <div class="button-group">
-        <GeneralButton onclick={clearAll} width_rem={5}>
-          Clear All
-        </GeneralButton>
-        <GeneralButton onclick={finishChannelEdit} width_rem={5}>
-          Finish
-        </GeneralButton>
-      </div>
-    {/if}
+<div class="centering-container">
+  <div class="container">
+    <div class="tree"><TreeDiagram tree_state={tree.st} /></div>
+    <div class="buttons">
+      {#each { length: 8 } as _, idx}
+        {@const labelKey = `label_${idx}` as keyof ButtonLabelState}
+        <div class="spacer">
+          {#if tree.button_mode}
+            <ProtectedButton
+              onInitialClick={() => tree.preemptiveAmpShutoff()}
+              onVerifiedClick={(verification) =>
+                tree.toChannel(idx, verification)}
+              width_rem={computedWidthPx / remPx}
+              highlighted={tree.button_colors[idx]}
+            >
+              <!-- Display label from global state -->
+              {tree.button_labels[labelKey]}
+            </ProtectedButton>
+          {:else}
+            <input
+              class="light"
+              type="text"
+              id={`name-${idx}`}
+              name={`name-${idx}`}
+              size="10"
+              placeholder={getDefaultName(idx)}
+              bind:value={proxy_labels[labelKey]}
+              style={`width: ${computedWidthPx}px`}
+            />
+          {/if}
+        </div>
+      {/each}
+    </div>
+    <!-- ... rest of the component ... -->
+    <div class="button-spacer">
+      <!-- <DotMenu {editChannelLabels} {defaultChannelLabels}></DotMenu> -->
+      {#if !tree.button_mode}
+        <div class="button-group">
+          <GeneralButton onclick={clearAll} width_rem={7}>
+            Clear All
+          </GeneralButton>
+          <GeneralButton onclick={defaultChannelLabels} width_rem={7}>
+            Default Labels
+          </GeneralButton>
+          <GeneralButton onclick={finishChannelEdit} width_rem={7}>
+            Finish
+          </GeneralButton>
+        </div>
+      {/if}
+    </div>
   </div>
 </div>
 
 <style>
-  /* ... existing styles ... */
+  .centering-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+  }
 
   .button-group {
     display: flex;
@@ -218,7 +228,7 @@
     justify-content: space-between;
     padding-top: 0rem;
     /* padding-left: 0.5rem; */
-    height: 4.28rem;
+    height: 6.82rem;
     padding-bottom: 0rem;
     /* justify-content: space-between; */
   }
@@ -242,8 +252,8 @@
     padding-bottom: 0.25rem;
     height: 1.7rem;
 
-    width: 10rem;
-    min-width: 8rem;
+    width: 3rem;
+    min-width: 3rem;
     font-family: Arial, Helvetica, sans-serif;
   }
 
@@ -275,9 +285,10 @@
     /* flex-direction: row; */
     /* justify-content: center;
     align-items: center; */
-    justify-content: center;
+    justify-content: left;
     margin: auto;
     height: 315px;
+    width: 25rem;
   }
 
   .buttons {

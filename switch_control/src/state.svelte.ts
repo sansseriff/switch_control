@@ -36,6 +36,7 @@ class Tree {
   tree_memory_mode: boolean = $state(false);
   cryo_voltage: number = $state(2.0);
   regular_voltage: number = $state(2.0);
+  button_mode: boolean = $state(true);
 
   constructor() {
   }

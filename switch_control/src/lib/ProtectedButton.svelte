@@ -59,7 +59,7 @@
     padding-bottom: 0.25rem;
     height: 1.7rem;
 
-    min-width: 10rem;
+    min-width: 5rem;
     text-align: center;
     font-family: Arial, Helvetica, sans-serif;
   }

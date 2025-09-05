@@ -19,6 +19,8 @@
   let inactivityMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
   let inactivityTimer: any = null;
 
+  let title_label = $state("Title Here");
+
   onMount(() => {
     let disposed = false;
     const onActivity = () => resetInactivityTimer();
@@ -74,58 +76,61 @@
   </div>
 
   <div class="main-content">
-    {#if isLoading}
-      <div class="loading-screen">
-        <p>Loading...</p>
+    <div class="title-holder">
+      {#if tree.button_mode}
+        <h2 class="input-label">{title_label}</h2>
+      {:else}
+        <input
+          class="input-label light"
+          type="text"
+          size="10"
+          placeholder={"Title Here"}
+          bind:value={title_label}
+          style={`width: 10rem`}
+        />
+      {/if}
+
+      <div class="top-group">
+        <div class="icon-holder">
+          {#if tree.cryo_mode}
+            <ThermometerCold size={25} style="color: #4d79ff;" />
+          {:else}
+            <ThermometerSimple size={25} style="color: black;" />
+          {/if}
+        </div>
       </div>
-    {:else}
-      <!-- <div class="left">
-        <ProtectedButton
-          onInitialClick={() => tree.preemptiveAmpShutoff()}
-          onVerifiedClick={(v) => tree.reAssertTree(v)}
-          width_rem={5.5}
-        >
-          ReAssert
-        </ProtectedButton>
-        <ProtectedButton
-          onInitialClick={() => tree.preemptiveAmpShutoff()}
-          onVerifiedClick={(v) => tree.resetTree(v)}
-          width_rem={5.5}
-        >
-          Reset
-        </ProtectedButton>
-      </div> -->
-      <!-- <div class="rright"> -->
-      <div class="spacer"></div>
-      <div class="inside"><TreeAndButtons></TreeAndButtons></div>
-      <div class="spacer">
-        <div class="top-group">
-          <div class="icon-holder">
-            {#if tree.cryo_mode}
-              <ThermometerCold size={25} style="color: #4d79ff;" />
-            {:else}
-              <ThermometerSimple size={25} style="color: black;" />
-            {/if}
+    </div>
+
+    <div class="else">
+      {#if isLoading}
+        <div class="loading-screen">
+          <p>Loading...</p>
+        </div>
+      {:else}
+        <div class="inside">
+          <TreeAndButtons></TreeAndButtons>
+          <div class="title-spacer"></div>
+          <!-- <div class="title-holder"></div> -->
+        </div>
+        <div class="spacer">
+          <div class="bottom-group">
+            <TooltipIcon
+              label={"Edit Configuration"}
+              onclick={() => (tree.button_mode = false)}
+            >
+              <PencilSimple size={25} />
+            </TooltipIcon>
+            <TooltipIcon
+              label={"New Configuration"}
+              onclick={() => (isMenuOpen = true)}
+            >
+              <Plus size={25} />
+            </TooltipIcon>
           </div>
         </div>
-
-        <div class="bottom-group">
-          <TooltipIcon
-            label={"New Configuration"}
-            onclick={() => (isMenuOpen = true)}
-          >
-            <Plus size={25} />
-          </TooltipIcon>
-          <TooltipIcon
-            label={"Edit Configuration"}
-            onclick={() => (isMenuOpen = true)}
-          >
-            <PencilSimple size={25} />
-          </TooltipIcon>
-        </div>
-      </div>
-      <!-- </div> -->
-    {/if}
+        <!-- </div> -->
+      {/if}
+    </div>
   </div>
 
   <MenuDialog bind:isOpen={isMenuOpen} />
@@ -133,6 +138,14 @@
 </main>
 
 <style>
+  h2 {
+    color: rgb(152, 152, 152);
+  }
+  .top-group {
+    /* width: 100%;
+    height: 100%; */
+  }
+
   .icon-holder {
     display: flex;
     justify-content: center;
@@ -142,9 +155,16 @@
     border-radius: 0.375rem;
     color: rgb(127, 127, 127);
     margin-bottom: 0.3rem;
+    margin-top: 0.3rem;
     background-color: transparent;
     border: none;
     padding: 0;
+  }
+
+  .bottom-group {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
   }
 
   .top-menu-section {
@@ -162,13 +182,16 @@
   .spacer {
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
-    width: 2.8rem;
+    /* width: 2.8rem; */
     height: 100%;
-    margin: 0.3rem;
+    box-sizing: border-box;
+    margin: 0;
     padding-bottom: 0.3rem;
     padding-top: 0.3rem;
+    margin-left: 0.2rem;
+    margin-right: 0.2rem;
   }
 
   main {
@@ -195,26 +218,96 @@
 
   .main-content {
     display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
     padding: 0;
     width: 100%;
     background-color: white;
-    /* padding: 3rem; */
+    /* height: 100%; */
   }
 
-  /* .rright {
-    
-  } */
+  .title-holder {
+    /* height: 4rem; */
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    /* margin: 0.2rem; */
+    margin: 0;
+    padding: 0;
+  }
+
+  .else {
+    display: flex;
+    flex-direction: row;
+    /* justify-content: space-between; */
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    padding: auto;
+    width: 100%;
+  }
+
+  input {
+    all: unset;
+    cursor: text;
+    text-align: left;
+    display: inline-block;
+    cursor: text;
+    appearance: none;
+
+    box-sizing: border-box;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 0.25rem;
+
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    height: 1.7rem;
+
+    width: 5rem;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  .light {
+    color: #6b7280;
+    border: 1.5px solid #dfe2e9;
+  }
+
+  .light:hover {
+    color: #181d25;
+    background-color: #f5f6f8;
+  }
+
+  .input-label {
+    font-size: large;
+    /* margin: 0.66rem; */
+    height: 2rem;
+    padding-top: 0.5rem;
+    padding-left: 0.5rem;
+  }
 
   .inside {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
     /* justify-content: space-between;
     align-items: flex-start; */
-    width: 100%;
-    margin: auto;
+    /* width: 100%; */
+    /* margin: auto; */
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+  }
+
+  .title-spacer {
+    height: 2.5rem;
   }
 
   /* Media query for smaller screens */
