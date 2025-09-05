@@ -223,10 +223,16 @@ FRAMELESS: bool = False
 
 
 def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
+
+
+    # NOTE: you NEED this on some computers. If the fastapi server isn't ready, then the webview hangs with a blank white page. 
+    time.sleep(0.3) 
+    # TODO: figure out how to send a message from fastapi to pywebview that it's ready
+    
     def on_closed():
         pipe_send.send("closed")
 
-    win = webview.create_window(
+    _win = webview.create_window(
         "Switch Control",
         url=url_to_load,
         resizable=True,
@@ -235,16 +241,18 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
         frameless=FRAMELESS,
         easy_drag=False,
     )
-    # webview.start(debug=True) # NOTE if this is activated, then you don't get graceful shutdown from hitting the close button. (on osx)
+    # webview.start(debug=False) # NOTE if this is activated, then you don't get graceful shutdown from hitting the close button. (on osx)
 
     # https://github.com/r0x0r/pywebview/issues/1496#issuecomment-2410471185
 
     # if FRAMELESS:
     #     win.events.before_load += add_buttons
-    win.events.closed += on_closed
+    _win.events.closed += on_closed
     print("debug is: ", debug)
+    # webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
     webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
-    win.evaluate_js("window.special = 3")
+    # webview.start()
+    _win.evaluate_js("window.special = 3")
     # print(f"Active GUI backend: {webview._webview.gui.__name__}")
 
 

@@ -10,8 +10,8 @@ dependencies = [
     "pyserial>=3.5",
     "pyvisa>=1.15.0",
     "pyvisa-py>=0.8.0",
-    "pywebview[qt5]>=5.4 ; sys_platform == 'linux'",
-    "pywebview[qt]>=5.4 ; sys_platform != 'linux'",
+    "pywebview[qt5]>=6.0 ; sys_platform == 'linux'",
+    "pywebview[qt]>=6.0 ; sys_platform != 'linux'",
     "requests>=2.32.3",
     "sqlmodel>=0.0.24",
 ]
