@@ -21,7 +21,12 @@ class Relay(object):
 
         # print(f"resource name for {visa_name}: ", self.getVersion())
 
-        if self.getVersion().startswith(resource_name_prefix):
+        resp = self.getVersion()
+        print("got response to getVersion(): ", resp)
+
+        # if resp contains the resource_name_prefix
+        if resource_name_prefix in resp:
+        # if resp.startswith(resource_name_prefix):
             print("Relay Connected")
         else:
             print("Relay not connected")
@@ -212,9 +217,14 @@ class Relay(object):
 
 
 if __name__ == "__main__":
-    visa_name_mac = "/dev/tty.usbmodem11201"
+    # visa_name_mac = "/dev/tty.usbmodem11201"
     # run ls /dev/*usb* to find the correct name for the relay
+    name = '/dev/ttyACM0'
+    relay = Relay(name)
 
-    relay = Relay(visa_name_mac)
-
-    relay.Reset()
+    # relay.Reset()
+    print(relay.getVersion())
+    print(relay.getVersion())
+    while True:
+        res = input("message to send: ")
+        print(relay.query(res, 100))
