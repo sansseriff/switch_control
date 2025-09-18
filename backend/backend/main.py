@@ -226,7 +226,7 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
 
 
     # NOTE: you NEED this on some computers. If the fastapi server isn't ready, then the webview hangs with a blank white page. 
-    time.sleep(0.3) 
+    time.sleep(0.6) 
     # TODO: figure out how to send a message from fastapi to pywebview that it's ready
     
     def on_closed():
@@ -237,7 +237,7 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
         url=url_to_load,
         resizable=True,
         width=800,
-        height=412,
+        height=430,
         frameless=FRAMELESS,
         easy_drag=False,
     )
@@ -724,6 +724,10 @@ def switch_pulse_generator(
     Body:
     { "kind": "dev" | "keysight" | "client", "ip": "10.9.0.18" }
     """
+
+    # override until I add the UI for pulse generator selection
+    payload = PulseGenRequest(kind="client", ip="10.9.0.18")
+
     v: CryoRelayManager = cryo
     if not isinstance(v.pulse_controller, FunctionGeneratorPulseController):
         raise HTTPException(
@@ -756,6 +760,7 @@ def _ensure_pulse_generator(
     """
     v = cryo
     requested_kind = (settings.pulse_generator_kind or "dev").lower()
+    print(f"Requested pulse generator: {requested_kind}")
     requested_ip = settings.pulse_generator_ip
     created = True
     message = None
