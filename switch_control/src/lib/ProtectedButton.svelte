@@ -55,11 +55,11 @@
 
     padding-left: 0rem;
     padding-right: 0rem;
-    padding-top: 0.25rem;
+    padding-top: 0.17rem;
     padding-bottom: 0.25rem;
     height: 1.7rem;
 
-    min-width: 10rem;
+    min-width: 5rem;
     text-align: center;
     font-family: Arial, Helvetica, sans-serif;
   }

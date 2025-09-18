@@ -1,5 +1,5 @@
 import type { TreeState, SwitchState, ButtonLabelState } from "./types"; // Import ButtonLabelState
-import { reset, flipSwitch, reAssert, requestChannel, updateButtonLabels, preemptiveAmpShutoff } from "./api"; // Import updateButtonLabels
+import { reset, flipSwitch, reAssert, requestChannel, updateButtonLabels, preemptiveAmpShutoff, updateSettings } from "./api"; // Import updateButtonLabels
 import type { Verification } from "./types";
 import { initialize } from "./api";
 import type { InitializationResponse } from "./api"; // Import InitializationResponse
@@ -31,6 +31,13 @@ class Tree {
 
   button_colors = $state([false, false, false, false, false, false, false, false]);
 
+  // settings
+  cryo_mode: boolean = $state(false);
+  tree_memory_mode: boolean = $state(false);
+  cryo_voltage: number = $state(2.0);
+  regular_voltage: number = $state(2.0);
+  button_mode: boolean = $state(true);
+
   constructor() {
   }
 
@@ -39,6 +46,20 @@ class Tree {
     return initialize().then((response: InitializationResponse) => {
       this.st = response.tree_state;
       this.button_labels = response.button_labels; // Store labels
+      // Initialize settings
+      if (response.settings) {
+        this.cryo_mode = response.settings.cryo_mode;
+        this.cryo_voltage = response.settings.cryo_voltage;
+        this.regular_voltage = response.settings.regular_voltage;
+        this.tree_memory_mode = response.settings.tree_memory_mode;
+      }
+
+      console.log("Initialized with settings:", {
+        cryo_mode: this.cryo_mode,
+        cryo_voltage: this.cryo_voltage,
+        regular_voltage: this.regular_voltage,
+        tree_memory_mode: this.tree_memory_mode
+      });
       this.updateButtons();
       return response; // Return the full response if needed
     });
@@ -110,6 +131,24 @@ class Tree {
     }).catch(error => {
       console.error("Failed to save button labels:", error);
       // Optionally revert changes or show an error message to the user
+    });
+  }
+
+  // Save settings to backend and update local state
+  saveSettings() {
+    const payload = {
+      cryo_mode: this.cryo_mode,
+      cryo_voltage: this.cryo_voltage,
+      regular_voltage: this.regular_voltage,
+      tree_memory_mode: this.tree_memory_mode
+    };
+    updateSettings(payload).then((saved) => {
+      this.cryo_mode = saved.cryo_mode;
+      this.cryo_voltage = saved.cryo_voltage;
+      this.regular_voltage = saved.regular_voltage;
+      console.log("Settings saved successfully.");
+    }).catch((error) => {
+      console.error("Failed to save settings:", error);
     });
   }
 }

@@ -1,4 +1,11 @@
 {
-    "CodeGPT.apiKey": "Ollama",
-    "liveServer.settings.port": 5501
+    "liveServer.settings.port": 5501,
+    "python.defaultInterpreterPath": "./backend/.venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "files.associations": {
+        "*.py": "python"
+    },
+    "python.analysis.extraPaths": ["./backend/.venv/bin/python"],
+    "ty.interpreter": ["./backend/.venv/bin/python"]
 }

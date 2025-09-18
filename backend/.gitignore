@@ -11,3 +11,5 @@ switch_control/.vscode/
 backend/switch_web
 
 database.db
+
+backend/switch_web/index.html

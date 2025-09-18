@@ -8,7 +8,7 @@ import multiprocessing
 from pathlib import Path
 
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import threading
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.responses import HTMLResponse
@@ -22,14 +22,11 @@ import tempfile
 
 from verification import Verification
 from multiprocessing.connection import Connection
-from starlette.datastructures import State
 from fastapi import HTTPException
-from multiprocessing import Manager, Event
 
 # import SyncManager type
 # from multiprocessing.managers import SyncManager
 # from multiprocessing.synchronize import Event as EventType
-import requests
 import argparse
 
 # import AppKit
@@ -38,6 +35,7 @@ from pulse_controller import (
     PulseController,
     SimpleRelayPulseController,
     FunctionGeneratorPulseController,
+    make_pulse_generator,
 )
 from node import Node, MaybeNode
 from models import (
@@ -47,11 +45,15 @@ from models import (
     SwitchState,
     Tree,
     T,
+    SettingsBase,
+    PulseGenRequest,
+    PulseGenInfo,
 )
 
 
 from ampProtector import AmpProtector
-
+from typing import Any
+from pydantic import BaseModel
 
 # print("THISS: ", THISS)
 from location import WEB_DIR
@@ -65,7 +67,8 @@ from db import (
     ButtonLabels,
     InitResponse,
     InitResponsePublic,
-    ButtonLabelsBase,
+    Settings,
+    TreeState,
 )
 
 FUNCTION_GEN = True
@@ -80,7 +83,8 @@ class CryoRelayManager:
     """
 
     def __init__(self, function_gen: bool = True):
-        # Initialize switch
+        # Initialize switch and synchronization
+        self.lock = threading.Lock()
 
         if function_gen:
             self.pulse_controller: PulseController = FunctionGeneratorPulseController()
@@ -137,10 +141,17 @@ class CryoRelayManager:
         # I have another program that accesses the keysight supply at the 
         # same time. Using sockets and a client connection to allow
         # multiple python processes to access the VISA device
-        self.amp_protector = AmpProtector(on=True, disabled=False, use_client=True)
+        self.amp_protector = AmpProtector(on=True, disabled=True, use_client=True)
 
     def cleanup(self):
         self.pulse_controller.cleanup()
+
+
+class Services:
+    """Container for long-lived services"""
+
+    def __init__(self, cryo: CryoRelayManager):
+        self.cryo = cryo
 
 
 # Define the lifespan context manager
@@ -150,9 +161,17 @@ async def lifespan(app: FastAPI):
     print("Creating database and tables...")
     create_db_and_tables()
     print("Database and tables created.")
+    # Initialize hardware/services once for the process
+    cryo_manager = await asyncio.to_thread(CryoRelayManager, FUNCTION_GEN)
+    app.state.services = Services(cryo=cryo_manager)
     yield
     # Code to run on shutdown (if any)
     print("Application shutting down.")
+    try:
+        app.state.services.cryo.cleanup()
+        print("CryoRelayManager cleaned up.")
+    except Exception as e:
+        print(f"Error during CryoRelayManager cleanup: {e}")
 
 
 # Pass the lifespan manager to the FastAPI app
@@ -169,11 +188,18 @@ app.add_middleware(
 )
 
 
-# Add dependency
-def get_state_manager():
-    print("the manager: ", app.state.v)
-    print("something inside: ", app.state.v.pulse_controller)
-    return app.state.v.v
+# Dependencies to access services without touching app.state in handlers
+def get_services(request: Request) -> Services:
+    return request.app.state.services
+
+
+def get_cryo(services: Annotated[Services, Depends(get_services)]) -> CryoRelayManager:
+    return services.cryo
+
+
+class PulseGenResponse(BaseModel):
+    ok: bool
+    info: PulseGenInfo
 
 
 mimetypes.init()
@@ -197,10 +223,16 @@ FRAMELESS: bool = False
 
 
 def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
+
+
+    # NOTE: you NEED this on some computers. If the fastapi server isn't ready, then the webview hangs with a blank white page. 
+    time.sleep(0.3) 
+    # TODO: figure out how to send a message from fastapi to pywebview that it's ready
+    
     def on_closed():
         pipe_send.send("closed")
 
-    win = webview.create_window(
+    _win = webview.create_window(
         "Switch Control",
         url=url_to_load,
         resizable=True,
@@ -209,15 +241,18 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
         frameless=FRAMELESS,
         easy_drag=False,
     )
+    # webview.start(debug=False) # NOTE if this is activated, then you don't get graceful shutdown from hitting the close button. (on osx)
 
     # https://github.com/r0x0r/pywebview/issues/1496#issuecomment-2410471185
 
     # if FRAMELESS:
     #     win.events.before_load += add_buttons
-    win.events.closed += on_closed
+    _win.events.closed += on_closed
     print("debug is: ", debug)
+    # webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
     webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
-    win.evaluate_js("window.special = 3")
+    # webview.start()
+    _win.evaluate_js("window.special = 3")
     # print(f"Active GUI backend: {webview._webview.gui.__name__}")
 
 
@@ -246,14 +281,16 @@ async def return_index(request: Request):
 
 
 def flatten_tree(root: MaybeNode) -> Tree:
-    state: dict[str, SwitchState | int] = {}
-    state["activated_channel"] = T.activated_channel
+    # Initialize defaults
+    r_states: dict[str, SwitchState] = {
+        f"R{i}": SwitchState(pos=False, color=False) for i in range(1, 8)
+    }
     queue = [root]
 
     while queue:
         current_node = queue.pop(0)
-        if type(current_node) is Node:
-            state[current_node.relay_name] = SwitchState(
+        if isinstance(current_node, Node):
+            r_states[current_node.relay_name] = SwitchState(
                 pos=current_node.polarity, color=current_node.in_use
             )
 
@@ -262,60 +299,69 @@ def flatten_tree(root: MaybeNode) -> Tree:
             if isinstance(current_node.right, Node):
                 queue.append(current_node.right)
 
-    # print("state: ", state)
-    return Tree(**state)
+    return Tree(
+        R1=r_states["R1"],
+        R2=r_states["R2"],
+        R3=r_states["R3"],
+        R4=r_states["R4"],
+        R5=r_states["R5"],
+        R6=r_states["R6"],
+        R7=r_states["R7"],
+        activated_channel=T.activated_channel,
+    )
 
 
-def init_tree(verification: Verification):
-    v: CryoRelayManager = app.state.v
+def init_tree(verification: Verification, cryo: CryoRelayManager):
+    v: CryoRelayManager = cryo
 
     v.amp_protector.turn_off_amp()
 
     # v.pulse_controller.turn_on(0, verification)
-
-    for node in v.nodes:
-        # time.sleep(SLEEP_TIME)
-        node.polarity = False
-        idx = int(node.relay_index)
-        v.pulse_controller.flip_left(idx, verification)
+    with v.lock:
+        for node in v.nodes:
+            # time.sleep(SLEEP_TIME)
+            node.polarity = False
+            idx = int(node.relay_index)
+            v.pulse_controller.flip_left(idx, verification)
 
     # app.state.v.switch.turn_off(0, verification)
 
-    update_color()
-    app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    update_color(v)
+    v.tree.tree_state = flatten_tree(v.top_node)
 
     v.amp_protector.turn_on_if_previously_on()
 
     return v.tree.tree_state
 
 
-def re_assert_tree(verification: Verification):
-    v: CryoRelayManager = app.state.v
+def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
+    v: CryoRelayManager = cryo
     v.amp_protector.turn_off_amp()
     current_node = v.top_node
 
-    while type(current_node) is Node:
-        idx = int(current_node.relay_index)
-        if current_node.polarity is True:
-            v.pulse_controller.flip_right(idx, verification)
-        else:
-            v.pulse_controller.flip_left(idx, verification)
-        current_node = current_node.to_next()
-        if type(current_node) is int:
-            break
+    with v.lock:
+        while isinstance(current_node, Node):
+            idx = int(current_node.relay_index)
+            if current_node.polarity is True:
+                v.pulse_controller.flip_right(idx, verification)
+            else:
+                v.pulse_controller.flip_left(idx, verification)
+            current_node = current_node.to_next()
+            if type(current_node) is int:
+                break
 
-    update_color()
-    app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    update_color(v)
+    v.tree.tree_state = flatten_tree(v.top_node)
     v.amp_protector.turn_on_if_previously_on()
 
-    return app.state.v.tree.tree_state
+    return v.tree.tree_state
 
 
-def update_color():
-    for node in app.state.v.nodes:
+def update_color(cryo: CryoRelayManager):
+    for node in cryo.nodes:
         node.in_use = False
 
-    current_node = app.state.v.top_node
+    current_node = cryo.top_node
     while current_node is not None:
         if type(current_node) is int:
             T.activated_channel = current_node
@@ -329,14 +375,36 @@ def update_color():
     print("current output channel: ", T.activated_channel)
 
 
+def apply_tree_state_to_nodes(cryo: CryoRelayManager, tree_state: Tree):
+    """Set node polarities from a persisted Tree and refresh derived fields.
+    Does not pulse hardware; only updates in-memory structures.
+    """
+    mapping = {
+        "R1": cryo.R1,
+        "R2": cryo.R2,
+        "R3": cryo.R3,
+        "R4": cryo.R4,
+        "R5": cryo.R5,
+        "R6": cryo.R6,
+        "R7": cryo.R7,
+    }
+    for key, node in mapping.items():
+        state: SwitchState = getattr(tree_state, key)
+        node.polarity = bool(state.pos)
+    # recompute in_use flags and activated channel
+    update_color(cryo)
+    cryo.tree.tree_state = flatten_tree(cryo.top_node)
+
+
 def channel_to_state(
     channel: int,
     verification: Verification,
+    cryo: CryoRelayManager,
 ):
     """
     take in user-numbering channel (1-8)
     """
-    v: CryoRelayManager = app.state.v
+    v: CryoRelayManager = cryo
     v.amp_protector.turn_off_amp()
 
 
@@ -350,7 +418,7 @@ def channel_to_state(
     binary = bin(channel)[2:]
     # binary should be 3 digits long
     binary = binary.zfill(3)
-    current_node = app.state.v.top_node
+    current_node = v.top_node
 
     for bit in enumerate(binary):
         print(bit[1])
@@ -371,8 +439,8 @@ def channel_to_state(
                 idx = int(current_node.relay_index)
                 v.pulse_controller.flip_left(idx, verification)
         current_node = current_node.to_next()
-    update_color()
-    app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    update_color(v)
+    v.tree.tree_state = flatten_tree(v.top_node)
 
     v.amp_protector.turn_on_if_previously_on()
 
@@ -380,12 +448,12 @@ def channel_to_state(
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
+async def validation_exception_handler(request: Request, exc: Any):
     return PlainTextResponse(str(exc), status_code=400)
 
 
 @app.exception_handler(400)
-async def bad_request_handler(request: Request, exc):
+async def bad_request_handler(request: Request, exc: Any):
     print("detail: ", exc)
     return JSONResponse(
         status_code=400,
@@ -394,49 +462,98 @@ async def bad_request_handler(request: Request, exc):
 
 
 @app.post("/reset")
-def reset(verification: Verification):
-    return init_tree(verification)
+def reset(
+    verification: Verification,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+    session: DBSession,
+):
+    state = init_tree(verification, cryo)
+    # persist
+    row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+    if not row:
+        row = TreeState(id=1)
+    row.tree_json = state.model_dump_json()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return state
 
 
 # Make sure the tree is in the correct state by re-submitting desired path
 @app.post("/re_assert")
-def re_assert(verification: Verification):
-    return re_assert_tree(verification)
+def re_assert(
+    verification: Verification,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+    session: DBSession,
+):
+    state = re_assert_tree(verification, cryo)
+    row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+    if not row:
+        row = TreeState(id=1)
+    row.tree_json = state.model_dump_json()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return state
 
 
 @app.post("/channel")
-def request_channel(channel: Channel):
+def request_channel(
+    channel: Channel,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+    session: DBSession,
+):
     print("cryo-channel requested: ", channel.number)
-    return channel_to_state(channel.number, channel.verification)
+    state = channel_to_state(channel.number, channel.verification, cryo)
+    # persist
+    if state is not None:
+        row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+        if not row:
+            row = TreeState(id=1)
+        row.tree_json = state.model_dump_json()
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+    return state
 
 
 @app.get("/tree")
-def get_tree():
-    # this will error if the tree is not initialized
-    v: CryoRelayManager = app.state.v
-    try:
-        return v.tree.tree_state
-    except:
-        print("/tree endpoint called before initialization")
+def get_tree(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
+    # tree is always available after lifespan init
+    return cryo.tree.tree_state
+
+@app.get("/tree/persisted", response_model=Tree)
+def get_persisted_tree(session: DBSession):
+    row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+    if not row or not row.tree_json:
+        raise HTTPException(status_code=404, detail="Persisted tree not found")
+    return Tree.model_validate_json(row.tree_json)
 
 
 @app.get("/initialize", response_model=InitResponsePublic)
-async def initialize(session: DBSession):  # Use DBSession
+async def initialize(
+    session: DBSession, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+):  # Use DBSession
     """
     Initializes the application state, including the tree state and button labels.
     """
     tree_state: Tree | None = None
-    labels: ButtonLabels | None = None  # Expecting the DB model
+    labels: ButtonLabels | None = None
+    settings: Settings | None = None
 
     try:
-        # Check if CryoRelayManager is already initialized in app state
-        if hasattr(app.state, "v") and app.state.v:
-            tree_state = app.state.v.tree.tree_state
+        # Load last saved tree state from DB (falls back to in-memory if missing)
+        row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
+        if row and row.tree_json:
+            try:
+                tree_state = Tree.model_validate_json(row.tree_json)
+                # also apply to running manager
+                cryo.tree.tree_state = tree_state
+                apply_tree_state_to_nodes(cryo, tree_state)
+            except Exception:
+                tree_state = cryo.tree.tree_state
         else:
-            # Initialize CryoRelayManager if not already done
-            manager = await asyncio.to_thread(CryoRelayManager, FUNCTION_GEN)
-            app.state = State({"v": manager})
-            tree_state = app.state.v.tree.tree_state
+            tree_state = cryo.tree.tree_state
 
         # Fetch button labels from the database
         statement = select(ButtonLabels).where(ButtonLabels.id == 1)
@@ -448,6 +565,24 @@ async def initialize(session: DBSession):  # Use DBSession
             print("Error: Button labels not found in DB during initialization.")
             raise HTTPException(status_code=500, detail="Button labels not found")
 
+        # Fetch settings from the database
+        settings_stmt = select(Settings).where(Settings.id == 1)
+        settings = session.exec(settings_stmt).one_or_none()
+        if not settings:
+            settings = Settings(id=1)
+            session.add(settings)
+            session.commit()
+            session.refresh(settings)
+
+        # Apply pulse amplitude based on cryo mode
+        if isinstance(cryo.pulse_controller, FunctionGeneratorPulseController):
+            cryo.pulse_controller.pulse_amplitude = (
+                settings.cryo_voltage if settings.cryo_mode else settings.regular_voltage
+            )
+
+        # Ensure pulse generator matches persisted settings with fallback
+        pulse_info = _ensure_pulse_generator(settings, cryo, session)
+
         if not tree_state:
             # Should not happen if initialization logic above worked
             print("Error: Tree state not available during initialization.")
@@ -458,7 +593,9 @@ async def initialize(session: DBSession):  # Use DBSession
         # this should get filtered into InitResponsePublic
         return InitResponse(
             tree_state=tree_state,
-            button_labels=labels,  # Pass the validated public model instance
+            button_labels=labels,
+            settings=settings,
+            pulse_generator=pulse_info,
         )
 
     except Exception as e:
@@ -475,6 +612,56 @@ def get_button_labels(session: DBSession):
         raise HTTPException(status_code=404, detail="Button labels not found")
 
     return db_labels
+
+
+# Settings endpoints
+@app.get("/settings", response_model=SettingsBase)
+def get_settings(session: DBSession):
+    stmt = select(Settings).where(Settings.id == 1)
+    settings = session.exec(stmt).one_or_none()
+    if not settings:
+        settings = Settings(id=1)
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+    return settings
+
+
+@app.post("/settings", response_model=SettingsBase)
+def update_settings(
+    payload: SettingsBase,
+    session: DBSession,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+):
+    print("updating settings: ", payload)
+    stmt = select(Settings).where(Settings.id == 1)
+    settings = session.exec(stmt).one_or_none()
+
+    # Only include fields provided by the client (won't overwrite others)
+    data = payload.model_dump(exclude_unset=True)
+
+    if not settings:
+        # Create with provided data plus fixed id
+        settings = Settings(id=1, **data)
+    else:
+        # Update existing instance dynamically so new fields are picked up automatically
+        for key, value in data.items():
+            if key != "id":
+                setattr(settings, key, value)
+
+    session.add(settings)
+    session.commit()
+    session.refresh(settings)
+
+    print("after: ", settings)
+
+    # Apply to running controller
+    if isinstance(cryo.pulse_controller, FunctionGeneratorPulseController):
+        cryo.pulse_controller.pulse_amplitude = (
+            settings.cryo_voltage if settings.cryo_mode else settings.regular_voltage
+        )
+
+    return settings
 
 
 @app.post("/button_labels", response_model=ButtonLabelsBase)  # Use public model
@@ -510,47 +697,132 @@ def update_button_labels(
 
 # auto-shutoff amps when showing the warning dialog
 @app.get("/preemptive_amp_shutoff")
-def preemptive_amp_shutoff():
-    v: CryoRelayManager = app.state.v
+def preemptive_amp_shutoff(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
+    v: CryoRelayManager = cryo
     v.amp_protector.turn_off_amp()
 
 
     return v.tree.tree_state
 
 @app.get("/cryo_mode")
-def set_cryo_mode():
-    v: CryoRelayManager = app.state.v
+def set_cryo_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
+    v: CryoRelayManager = cryo
     v.pulse_controller.cryo_mode()
 
 @app.get("/room_temp_mode")
-def set_room_temp_mode():
-    v: CryoRelayManager = app.state.v
+def set_room_temp_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
+    v: CryoRelayManager = cryo
     v.pulse_controller.room_temp_mode()
 
+
+@app.post("/pulse_generator", response_model=PulseGenResponse)
+def switch_pulse_generator(
+    payload: PulseGenRequest, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+):
+    """Switch the active PulseGenerator implementation at runtime.
+
+    Body:
+    { "kind": "dev" | "keysight" | "client", "ip": "10.9.0.18" }
+    """
+    v: CryoRelayManager = cryo
+    if not isinstance(v.pulse_controller, FunctionGeneratorPulseController):
+        raise HTTPException(
+            status_code=400,
+            detail="Active PulseController does not support external pulse generators",
+        )
+
+    try:
+        # Update settings in DB and apply with fallback
+        session: Session = next(get_session())
+        settings = session.exec(select(Settings).where(Settings.id == 1)).one_or_none()
+        if not settings:
+            settings = Settings(id=1)
+        settings.pulse_generator_kind = payload.kind
+        settings.pulse_generator_ip = payload.ip
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+        info = _ensure_pulse_generator(settings, v, session)
+        return PulseGenResponse(ok=True, info=info)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to switch generator: {e}")
+
+
+def _ensure_pulse_generator(
+    settings: Settings, cryo: CryoRelayManager, session: Session
+) -> PulseGenInfo:
+    """Ensure the FunctionGeneratorPulseController has the generator from settings.
+    Fall back to dev on failure. Persist the effective kind back to settings if needed.
+    """
+    v = cryo
+    requested_kind = (settings.pulse_generator_kind or "dev").lower()
+    requested_ip = settings.pulse_generator_ip
+    created = True
+    message = None
+
+    if not isinstance(v.pulse_controller, FunctionGeneratorPulseController):
+        return PulseGenInfo(
+            requested_kind=requested_kind,
+            requested_ip=requested_ip,
+            active_kind="simple-relay",
+            created=True,
+            message="Simple relay controller in use; no external generator",
+        )
+
+    try:
+        gen = make_pulse_generator(requested_kind, requested_ip)
+        v.pulse_controller.set_generator(gen)
+        active_kind = requested_kind
+    except Exception as e:
+        # Fallback
+        created = False
+        message = f"Falling back to dev generator: {e}"
+        gen = make_pulse_generator("dev", None)
+        v.pulse_controller.set_generator(gen)
+        active_kind = "dev"
+
+    # Persist the active kind in settings if it changed
+    if settings.pulse_generator_kind != active_kind:
+        settings.pulse_generator_kind = active_kind
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+
+    return PulseGenInfo(
+        requested_kind=requested_kind,
+        requested_ip=requested_ip,
+        active_kind=active_kind,
+        created=created,
+        message=message,
+    )
 
 
 
 @app.post("/switch")
-def toggle_switch(toggle: ToggleRequest):
-    v: CryoRelayManager = app.state.v
+def toggle_switch(
+    toggle: ToggleRequest,
+    cryo: Annotated[CryoRelayManager, Depends(get_cryo)],
+    session: DBSession,
+):
+    v: CryoRelayManager = cryo
 
     v.amp_protector.turn_off_amp()
 
     sw = v.nodes[toggle.number - 1]
     # print("the switch to toggle: ", sw.relay_name)
+    with v.lock:
+        if sw.polarity:
+            idx = int(sw.relay_index)
+            v.pulse_controller.flip_left(idx, toggle.verification)
+            sw.polarity = False
 
-    if sw.polarity:
-        idx = int(sw.relay_index)
-        v.pulse_controller.flip_left(idx, toggle.verification)
-        sw.polarity = False
+        else:
+            idx = int(sw.relay_index)
+            v.pulse_controller.flip_right(idx, toggle.verification)
+            sw.polarity = True
 
-    else:
-        idx = int(sw.relay_index)
-        v.pulse_controller.flip_right(idx, toggle.verification)
-        sw.polarity = True
-
-    update_color()
-    app.state.v.tree.tree_state = flatten_tree(v.top_node)
+    update_color(v)
+    v.tree.tree_state = flatten_tree(v.top_node)
 
     v.amp_protector.turn_on_if_previously_on()
     return v.tree.tree_state
@@ -612,11 +884,5 @@ if __name__ == "__main__":
     while "closed" not in window_status:
         window_status = conn_recv.recv()
         print(f"got {window_status}", flush=True)
-
-    # Call the /cleanup endpoint
-    try:
-        response = requests.post(f"http://{server_ip}:{server_port}/cleanup")
-    except Exception as e:
-        print(f"Exception while calling cleanup endpoint: {e}")
 
     instance.stop()

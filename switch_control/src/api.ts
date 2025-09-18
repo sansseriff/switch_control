@@ -1,10 +1,10 @@
 import type Tree from "./lib/TreeDiagram.svelte";
-import type { TreeState, ButtonLabelState } from "./types"; // Add ButtonLabelState
+import type { TreeState, ButtonLabelState, Settings } from "./types"; // Add ButtonLabelState and Settings
 import type { Verification } from "./types";
 
 
 function isPywebview() {
-    return typeof window.QObject !== 'undefined';
+    return typeof (window as any).QObject !== 'undefined';
 }
 
 
@@ -53,9 +53,10 @@ interface ToggleRequest {
 }
 
 // Define the structure for the initialization response
-interface InitializationResponse {
+export interface InitializationResponse {
     tree_state: TreeState;
     button_labels: ButtonLabelState;
+    settings: Settings;
 }
 
 // Define the structure for button labels payload/response
@@ -114,4 +115,13 @@ export async function initialize(): Promise<InitializationResponse> {
     // if (!response.ok) {
     //     throw new Error('Failed to initialize');
     // }
+}
+
+// Settings API
+export function getSettings(): Promise<Settings> {
+    return fetchWithConfig('/settings', 'GET');
+}
+
+export function updateSettings(settings: Settings): Promise<Settings> {
+    return fetchWithConfig('/settings', 'POST', settings);
 }
