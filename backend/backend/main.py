@@ -35,6 +35,7 @@ from pulse_controller import (
     PulseController,
     SimpleRelayPulseController,
     FunctionGeneratorPulseController,
+    ClientKeysightPulseGenerator,
     make_pulse_generator,
 )
 from node import Node, MaybeNode
@@ -80,6 +81,10 @@ DBSession = Annotated[Session, Depends(get_session)]
 class CryoRelayManager:
     """
     Manages the cryogenic teledyne relays and their state.
+
+    CryoRelayManager is concerned with the layout of the cryogenic relays. NOT how they are actuated. 
+
+    All the details of actuating a relay are left to the internal pulse_controller, for which there's multiple types. 
     """
 
     def __init__(self, function_gen: bool = True):
@@ -87,7 +92,9 @@ class CryoRelayManager:
         self.lock = threading.Lock()
 
         if function_gen:
-            self.pulse_controller: PulseController = FunctionGeneratorPulseController()
+            # override!!
+            self.pulse_controller: PulseController = FunctionGeneratorPulseController(generator=ClientKeysightPulseGenerator())
+            #self.pulse_controller: PulseController = FunctionGeneratorPulseController()
         else:
             self.pulse_controller: PulseController = SimpleRelayPulseController()
 
@@ -145,6 +152,7 @@ class CryoRelayManager:
 
     def cleanup(self):
         self.pulse_controller.cleanup()
+
 
 
 class Services:
@@ -226,7 +234,7 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
 
 
     # NOTE: you NEED this on some computers. If the fastapi server isn't ready, then the webview hangs with a blank white page. 
-    time.sleep(0.6) 
+    time.sleep(1) 
     # TODO: figure out how to send a message from fastapi to pywebview that it's ready
     
     def on_closed():
@@ -315,6 +323,7 @@ def init_tree(verification: Verification, cryo: CryoRelayManager):
     v: CryoRelayManager = cryo
 
     v.amp_protector.turn_off_amp()
+    v.pulse_controller.unblock_pulser(verification)
 
     # v.pulse_controller.turn_on(0, verification)
     with v.lock:
@@ -331,12 +340,15 @@ def init_tree(verification: Verification, cryo: CryoRelayManager):
 
     v.amp_protector.turn_on_if_previously_on()
 
+    v.pulse_controller.block_pulser(verification)
+
     return v.tree.tree_state
 
 
 def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
     v: CryoRelayManager = cryo
     v.amp_protector.turn_off_amp()
+    v.pulse_controller.unblock_pulser(verification)
     current_node = v.top_node
 
     with v.lock:
@@ -352,7 +364,9 @@ def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
 
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
+
     v.amp_protector.turn_on_if_previously_on()
+    v.pulse_controller.block_pulser(verification)
 
     return v.tree.tree_state
 
@@ -406,6 +420,7 @@ def channel_to_state(
     """
     v: CryoRelayManager = cryo
     v.amp_protector.turn_off_amp()
+    v.pulse_controller.unblock_pulser(verification)
 
 
     if channel < 0 or channel > 7:
@@ -443,6 +458,7 @@ def channel_to_state(
     v.tree.tree_state = flatten_tree(v.top_node)
 
     v.amp_protector.turn_on_if_previously_on()
+    v.pulse_controller.block_pulser(verification)
 
     return v.tree.tree_state
 
@@ -541,6 +557,11 @@ async def initialize(
     labels: ButtonLabels | None = None
     settings: Settings | None = None
 
+
+
+    ##
+
+
     try:
         # Load last saved tree state from DB (falls back to in-memory if missing)
         row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
@@ -573,6 +594,12 @@ async def initialize(
             session.add(settings)
             session.commit()
             session.refresh(settings)
+
+
+        # override Settings.pulse
+
+        settings.pulse_generator_kind = "client"
+        settings.pulse_generator_ip = "10.9.0.18"
 
         # Apply pulse amplitude based on cryo mode
         if isinstance(cryo.pulse_controller, FunctionGeneratorPulseController):
@@ -725,9 +752,6 @@ def switch_pulse_generator(
     { "kind": "dev" | "keysight" | "client", "ip": "10.9.0.18" }
     """
 
-    # override until I add the UI for pulse generator selection
-    payload = PulseGenRequest(kind="client", ip="10.9.0.18")
-
     v: CryoRelayManager = cryo
     if not isinstance(v.pulse_controller, FunctionGeneratorPulseController):
         raise HTTPException(
@@ -812,6 +836,7 @@ def toggle_switch(
     v: CryoRelayManager = cryo
 
     v.amp_protector.turn_off_amp()
+    v.pulse_controller.unblock_pulser(toggle.verification)
 
     sw = v.nodes[toggle.number - 1]
     # print("the switch to toggle: ", sw.relay_name)
@@ -830,6 +855,8 @@ def toggle_switch(
     v.tree.tree_state = flatten_tree(v.top_node)
 
     v.amp_protector.turn_on_if_previously_on()
+    v.pulse_controller.block_pulser(toggle.verification)
+    
     return v.tree.tree_state
 
 

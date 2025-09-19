@@ -12,6 +12,8 @@ from models import SwitchState, Tree, T
 FG_IP = os.getenv("FG_IP", "10.9.0.50")
 EXTRA_SLEEP_TIME = 0
 
+# self.fg = keysight33622A("10.9.0.18")
+
 
 class PulseGenerator(ABC):
     """
@@ -93,6 +95,7 @@ class KeysightPulseGenerator(PulseGenerator):
         self._impl.set_output(channel, int(bool(enabled)))
 
     def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+        print(f"triggering with polarity: {polarity} and amplitude: {amplitude}")
         self._impl.trigger_with_polarity(channel, amplitude, polarity)
 
 
@@ -117,6 +120,8 @@ class ClientKeysightPulseGenerator(PulseGenerator):
         self._impl.set_output(channel, int(bool(enabled)))
 
     def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+
+        print(f"triggering with polarity: {polarity} and amplitude: {amplitude}")
         self._impl.trigger_with_polarity(channel, amplitude, polarity)
 
 
@@ -159,6 +164,18 @@ class PulseController(ABC):
         """
         Set the pulse controller to room temperature mode.
         """
+        pass
+
+
+    @abstractmethod
+    def unblock_pulser(self, verification: Verification):
+        """
+        If a relay is set up to block a function generator from sending pulses,
+        this method will unblock it.
+        """
+
+    @abstractmethod
+    def block_pulser(self, verification: Verification):
         pass
 
     def initialize_relay(self):
@@ -241,11 +258,27 @@ class SimpleRelayPulseController(PulseController):
     def room_temp_mode(self):
         pass
 
+    def block_pulser(self, verification: Verification):
+        # no blocking system assumed
+        pass
+
+    def unblock_pulser(self, verification: Verification):
+        # no blocking system assumed
+        pass
+
 
 class FunctionGeneratorPulseController(PulseController):
     """
     A PulseController that uses a function generator to send voltage pulses to the
     cryogenic relays.
+
+    This class is concerned with wire switching using the relays. 
+
+    This class is NOT concerned with how the pulses are requested (client/direct). That's left to the
+    type of PulseGenerator chosen. 
+
+    FunctionGeneratorPulseController -> decide what relay to pulse when
+    PulseGenerator -> send the actual pulses
     """
 
     def __init__(
@@ -406,7 +439,14 @@ class FunctionGeneratorPulseController(PulseController):
 
             current_node = current_node.to_next()
 
-        # time.sleep(10)
+    def unblock_pulser(self, verification: Verification):
+        print("turning on the protection relay")
+        self.relay_board.turn_on(0, verification)
+        time.sleep(0.1)
+
+    def block_pulser(self, verification: Verification):
+        print("turning off the protection relay")
+        self.relay_board.turn_off(0, verification)
 
     def cleanup(self):
         self.relay_board.Reset()
