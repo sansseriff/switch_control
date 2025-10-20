@@ -198,7 +198,10 @@ class ClientKeysight33622A:
     def trigger_with_polarity(self, channel: int, high_level: float, polarity: str):
         """Trigger with specific polarity"""
         return self._send_request_with_retry('trigger_with_polarity', channel, high_level, polarity)
-        
+    
+    def setup_trigger(self, channel: int, source: str):
+        return self._send_request_with_retry('setup_trigger', channel, source)
+
     def filter_channel(self, phase: float, freq: float):
         """Legacy compatibility function for channel 1 settings"""
         return self._send_request_with_retry('filter_channel', phase, freq)

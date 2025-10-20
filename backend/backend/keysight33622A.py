@@ -119,13 +119,13 @@ class keysight33622A(visaInst):
         """Synchronize the phase of all channels"""
         self.write(":SOURce:PHASe:SYNChronize")
 
-    def enable_burst(self, channel: int, burst_count: int = 1):
-        """
-        Enable burst mode for a specific channel
-        :param channel: Channel number (1 or 2)
-        :param burst_count: Number of bursts
-        """
-        pass
+    # def enable_burst(self, channel: int, burst_count: int = 1):
+    #     """
+    #     Enable burst mode for a specific channel
+    #     :param channel: Channel number (1 or 2)
+    #     :param burst_count: Number of bursts
+    #     """
+    #     pass
         # self.write(f':SOURCe{channel}:BURSt')
         # self.write('*OPC')
         # self.write(f':SOURce{channel}:BURSt:NCYCles {burst_count}')
@@ -248,6 +248,14 @@ class keysight33622A(visaInst):
         self.set_amplitude(2, 1.210)
         self.set_offset(1, 0.5)
         self.set_offset(2, 1.210 / 2)
+
+    def setup_trigger(self, channel: int, source: str):
+        # can be {IMMediate|EXTernal|TIMer|BUS}
+
+        if source not in ["IMMediate", "EXTernal", "TIMer", "BUS"]:
+            raise ValueError("Invalid trigger source. Must be one of IMMediate, EXTernal, TIMer, BUS.")
+
+        return self.write(f":TRIGger{channel}:SOURce {source}")
 
 
 if __name__ == "__main__":

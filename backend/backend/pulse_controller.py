@@ -36,6 +36,10 @@ class PulseGenerator(ABC):
         pass
 
     @abstractmethod
+    def setup_trigger(self, channel: int, source: str) -> None:
+        pass
+
+    @abstractmethod
     def set_output(self, channel: int, enabled: int | bool) -> None:
         pass
 
@@ -65,6 +69,9 @@ class DevModePulseGenerator(PulseGenerator):
     def setup_pulse(self, width: float) -> None:
         print(f"[{self.name}] setup_pulse(width={width})")
 
+    def setup_trigger(self, channel, source: str) -> None:
+        print(f"[{self.name}] setup_trigger(channel={channel}, source={source})")
+
     def set_output(self, channel: int, enabled: int | bool) -> None:
         print(f"[{self.name}] set_output(channel={channel}, enabled={int(bool(enabled))})")
 
@@ -91,6 +98,9 @@ class KeysightPulseGenerator(PulseGenerator):
     def setup_pulse(self, width: float) -> None:
         self._impl.setup_pulse(width=width)
 
+    def setup_trigger(self, channel, source: str) -> None:
+        self._impl.setup_trigger(channel, source)
+
     def set_output(self, channel: int, enabled: int | bool) -> None:
         self._impl.set_output(channel, int(bool(enabled)))
 
@@ -115,6 +125,9 @@ class ClientKeysightPulseGenerator(PulseGenerator):
 
     def setup_pulse(self, width: float) -> None:
         self._impl.setup_pulse(width=width)
+
+    def setup_trigger(self, channel, source: str) -> None:
+        self._impl.setup_trigger(channel, source)
 
     def set_output(self, channel: int, enabled: int | bool) -> None:
         self._impl.set_output(channel, int(bool(enabled)))
@@ -380,6 +393,8 @@ class FunctionGeneratorPulseController(PulseController):
             generator.connect()
             generator.setup_pulse(width=0.050)  # 50 ms
             generator.set_output(1, 1)
+            generator.setup_trigger(1, "BUS") # BUS/Manual allows triggering from python
+
         except Exception as e:
             print(f"Failed to initialize pulse generator: {e}")
 

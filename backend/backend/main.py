@@ -214,7 +214,6 @@ mimetypes.init()
 
 PULSE_TIME = 50
 SLEEP_TIME = 0.050
-REMEMBER_STATE: bool = False
 FRAMELESS: bool = False
 
 
@@ -414,6 +413,7 @@ def channel_to_state(
     channel: int,
     verification: Verification,
     cryo: CryoRelayManager,
+    tree_memory_mode: bool,
 ):
     """
     take in user-numbering channel (1-8)
@@ -442,13 +442,13 @@ def channel_to_state(
             return
         time.sleep(SLEEP_TIME)
         if bit[1] == "0":
-            if (not current_node.polarity) or (not REMEMBER_STATE):
+            if (not current_node.polarity) or (not tree_memory_mode):
                 current_node.polarity = True
                 idx = int(current_node.relay_index)
                 print(f"flip cryo relay {current_node.relay_index} left")
                 v.pulse_controller.flip_right(idx, verification)
         else:
-            if (current_node.polarity) or (not REMEMBER_STATE):
+            if (current_node.polarity) or (not tree_memory_mode):
                 print(f"flip cryo relay {current_node.relay_index} right")
                 current_node.polarity = False
                 idx = int(current_node.relay_index)
@@ -520,7 +520,17 @@ def request_channel(
     session: DBSession,
 ):
     print("cryo-channel requested: ", channel.number)
-    state = channel_to_state(channel.number, channel.verification, cryo)
+    # Read current tree_memory_mode from settings so changes are honored at runtime
+    settings = session.exec(select(Settings).where(Settings.id == 1)).one_or_none()
+    if not settings:
+        settings = Settings(id=1)
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+
+    state = channel_to_state(
+        channel.number, channel.verification, cryo, bool(settings.tree_memory_mode)
+    )
     # persist
     if state is not None:
         row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
