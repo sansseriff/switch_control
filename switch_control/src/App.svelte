@@ -20,6 +20,25 @@
   let inactivityTimer: any = null;
 
   let title_label = $state("Title Here");
+  // Dynamic width for the title (h2/input) so it expands with text
+  let titleWidthPx = $state(160);
+  let measureEl: HTMLElement | null = null;
+
+  function recomputeTitleWidth() {
+    // Use placeholder text when empty so the control doesn't collapse
+    const text = (title_label && title_label.trim() !== "")
+      ? title_label
+      : "Title Here";
+    if (!measureEl) return;
+    // Update the hidden measurement element's text then read its width
+    measureEl.textContent = text;
+    // Include a small ceil to avoid sub-pixel clipping
+    const measured = Math.ceil(measureEl.offsetWidth);
+    // Minimum width similar to prior ~5rem default for stability
+    const rootFs = parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+    const minPx = 5 * (Number.isNaN(rootFs) ? 16 : rootFs);
+    titleWidthPx = Math.max(minPx, measured);
+  }
 
   onMount(() => {
     let disposed = false;
@@ -35,6 +54,8 @@
       // api calls to get_tree before the tree is initialized. Causing an error.
       if (disposed) return;
       isLoading = false;
+  // Ensure initial width is computed once fonts/styles have applied
+  recomputeTitleWidth();
 
       // start inactivity monitor after init
       resetInactivityTimer();
@@ -43,6 +64,7 @@
       window.addEventListener("keydown", onActivity);
       window.addEventListener("pointerdown", onActivity);
       window.addEventListener("scroll", onActivity, { passive: true });
+  window.addEventListener("resize", recomputeTitleWidth);
     })();
 
     return () => {
@@ -51,6 +73,7 @@
       window.removeEventListener("keydown", onActivity);
       window.removeEventListener("pointerdown", onActivity);
       window.removeEventListener("scroll", onActivity);
+  window.removeEventListener("resize", recomputeTitleWidth);
       if (inactivityTimer) clearTimeout(inactivityTimer);
     };
   });
@@ -61,6 +84,14 @@
       isCryoCheckOpen = true;
     }, inactivityMs);
   }
+
+  // Recompute width reactively when text or mode changes
+  $effect(() => {
+    title_label;
+    tree.button_mode;
+    // Use a microtask to let DOM/text update before measuring
+    queueMicrotask(recomputeTitleWidth);
+  });
 </script>
 
 <main>
@@ -78,7 +109,7 @@
   <div class="main-content">
     <div class="title-holder">
       {#if tree.button_mode}
-        <h2 class="input-label">{title_label}</h2>
+        <h2 class="input-label" style={`width: ${titleWidthPx}px`}>{title_label}</h2>
       {:else}
         <input
           class="input-label light"
@@ -86,7 +117,7 @@
           size="10"
           placeholder={"Title Here"}
           bind:value={title_label}
-          style={`width: 10rem`}
+          style={`width: ${titleWidthPx}px`}
         />
       {/if}
 
@@ -135,6 +166,12 @@
 
   <MenuDialog bind:isOpen={isMenuOpen} />
   <CryoCheck bind:isOpen={isCryoCheckOpen} />
+  <!-- Hidden measurement element to compute exact width including padding/border -->
+  <span
+    class="input-label measure"
+    aria-hidden="true"
+    bind:this={measureEl}
+  >{title_label}</span>
 </main>
 
 <style>
@@ -260,24 +297,21 @@
     appearance: none;
 
     box-sizing: border-box;
-    font-size: 0.875rem;
-    font-weight: 500;
-    border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.25rem;
 
-    padding-left: 0.2rem;
-    padding-right: 0.2rem;
-    padding-top: 0.25rem;
-    padding-bottom: 0.25rem;
+  padding-left: 0.2rem;
+  padding-right: 0.2rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
     height: 1.7rem;
 
     width: 5rem;
     font-family: Arial, Helvetica, sans-serif;
   }
 
-  .light {
-    color: #6b7280;
-    border: 1.5px solid #dfe2e9;
-  }
+  
 
   .light:hover {
     color: #181d25;
@@ -285,11 +319,43 @@
   }
 
   .input-label {
+    /* Make input and h2 occupy identical geometry so text doesn't jump when toggling */
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+  /* Keep as a single line and avoid flexbox shrinking */
+  white-space: nowrap;
+  flex: 0 0 auto;
+
+    /* Typography unified for both input and h2 */
+    font-family: Arial, Helvetica, sans-serif;
     font-size: large;
-    /* margin: 0.66rem; */
+    font-weight: 500;
+
+    /* Sizing + vertical centering */
     height: 2rem;
-    padding-top: 0.5rem;
+    line-height: 2rem;
+
+    /* Padding matches input so inner text position is identical */
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    padding-right: 0.2rem;
     padding-left: 0.5rem;
+
+    /* Remove default h2 top/bottom margins while preserving the left offset */
+    margin: 0;
+    margin-left: 0.25rem;
+
+    /* Reserve space for the editable border even in display mode */
+    border: 1.5px solid transparent;
+    border-radius: 0.25rem;
+  }
+
+  .light {
+    color: #6b7280;
+  /* Always show the border in edit mode */
+   border: 1.5px solid #dfe2e9; /* slightly stronger than #dfe2e9 */
+    background-color: #ffffff;
   }
 
   .inside {
@@ -308,6 +374,15 @@
 
   .title-spacer {
     height: 2.5rem;
+  }
+
+  /* Hidden measurement element used to size the title precisely */
+  .measure {
+    position: absolute;
+    visibility: hidden;
+    white-space: pre;
+    left: -9999px;
+    top: -9999px;
   }
 
   /* Media query for smaller screens */
