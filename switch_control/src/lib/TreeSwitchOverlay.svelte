@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tree } from "../state.svelte";
+  import { tree } from "../tree_state.svelte";
   import type { Verification } from "../types";
   import VerifiedIconButton from "./VerifiedIconButton.svelte";
 

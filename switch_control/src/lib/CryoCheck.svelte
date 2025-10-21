@@ -2,7 +2,7 @@
   import { Dialog } from "bits-ui";
   import X from "phosphor-svelte/lib/X";
   import GeneralButton from "./GeneralButton.svelte";
-  import { tree } from "../state.svelte";
+  import { tree } from "../tree_state.svelte";
   // base dialog styles
   import "../dialog.css";
 

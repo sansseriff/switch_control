@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { tree } from "../state.svelte";
+  import { tree } from "../tree_state.svelte";
   // Remove unused imports if any: requestChannel, flipSwitch, reset
-  import { getTreeState } from "../api"; // Keep getTreeState for now, though init handles it
   import { onMount } from "svelte";
   import type { TreeState, ButtonLabelState } from "../types"; // Import ButtonLabelState
   import TreeDiagram from "./TreeDiagram.svelte";
@@ -14,8 +13,15 @@
   // Remove local buttons_state, derive from tree.button_labels instead
   // let buttons_state: ButtonState[] = $state([...]);
 
-  // Reactive proxy names for editing mode
-  let proxy_labels = $state({ ...tree.button_labels });
+  // Controlled props from parent (App) - Svelte 5 style
+  const props = $props<{
+    labels: ButtonLabelState;
+    isEditing: boolean;
+    onFinishConfiguration?: (labels: ButtonLabelState) => void;
+  }>();
+
+  // Local proxy for editing
+  let proxy_labels = $state({ ...props.labels });
 
   // let button_mode = $state(true);
 
@@ -41,7 +47,7 @@
   function getLabelAt(i: number): string {
     const key = `label_${i}` as keyof ButtonLabelState;
     // While editing, use proxy labels; otherwise use saved labels
-    const src = tree.button_mode ? tree.button_labels : proxy_labels;
+  const src = props.isEditing ? proxy_labels : props.labels;
     // Fall back to placeholder if empty
     const v = (src[key] || "") as string;
     return v.trim() !== "" ? v : getDefaultName(i);
@@ -63,8 +69,7 @@
 
   function editChannelLabels() {
     // Initialize proxy labels with current labels when entering edit mode
-    proxy_labels = { ...tree.button_labels };
-    tree.button_mode = false;
+  proxy_labels = { ...props.labels };
   }
 
   function defaultChannelLabels() {
@@ -79,9 +84,7 @@
       label_6: "Ch 7",
       label_7: "Ch 8",
     };
-    proxy_labels = { ...defaultLabels }; // Update local edit state
-    tree.saveButtonLabels(defaultLabels); // Save to backend and update global state
-    tree.button_mode = true; // Exit edit mode
+  proxy_labels = { ...defaultLabels }; // Update local edit state
   }
 
   function clearAll() {
@@ -101,19 +104,8 @@
   function finishChannelEdit() {
     // Prepare payload from proxy_labels
     const labelsToSave: ButtonLabelState = { ...proxy_labels };
-
-    // Check if all proxy labels are empty; if so, revert to defaults
-    const all_empty = Object.values(labelsToSave).every(
-      (label) => label === "",
-    );
-
-    if (all_empty) {
-      defaultChannelLabels(); // This already saves defaults and exits edit mode
-    } else {
-      // Save the edited labels from proxy_labels
-      tree.saveButtonLabels(labelsToSave);
-      tree.button_mode = true; // Exit edit mode
-    }
+  // If all empty, parent will replace with defaults
+  props.onFinishConfiguration?.(labelsToSave);
   }
 
   // Use tree.init() which now fetches both tree state and labels
@@ -132,16 +124,8 @@
       recomputeWidth();
     };
     window.addEventListener("resize", onResize);
-    tree
-      .init()
-      .catch((error) => {
-        console.error("Initialization failed:", error);
-        // Handle initialization error (e.g., show message to user)
-      })
-      .finally(() => {
-        // After init sets labels/state, recompute to match actual labels
-        recomputeWidth();
-      });
+  // Tree init is handled at a higher level; avoid duplicate fetches here
+  recomputeWidth();
 
     return () => window.removeEventListener("resize", onResize);
   });
@@ -149,9 +133,9 @@
   // Recompute width reactively on label or mode changes
   $effect(() => {
     // depend on these to trigger effect
-    tree.button_labels; // saved labels
+  props.labels; // saved labels from parent
     proxy_labels; // editing labels
-    tree.button_mode;
+  props.isEditing;
     recomputeWidth();
   });
 
@@ -168,7 +152,7 @@
       {#each { length: 8 } as _, idx}
         {@const labelKey = `label_${idx}` as keyof ButtonLabelState}
         <div class="spacer">
-          {#if tree.button_mode}
+          {#if !props.isEditing}
             <ProtectedButton
               onInitialClick={() => tree.preemptiveAmpShutoff()}
               onVerifiedClick={(verification) =>
@@ -177,7 +161,7 @@
               highlighted={tree.button_colors[idx]}
             >
               <!-- Display label from global state -->
-              {tree.button_labels[labelKey]}
+              {props.labels[labelKey]}
             </ProtectedButton>
           {:else}
             <input
@@ -197,7 +181,7 @@
     <!-- ... rest of the component ... -->
     <div class="button-spacer">
       <!-- <DotMenu {editChannelLabels} {defaultChannelLabels}></DotMenu> -->
-      {#if !tree.button_mode}
+  {#if props.isEditing}
         <div class="button-group">
           <GeneralButton onclick={clearAll} width_rem={7}>
             Clear All

@@ -4,6 +4,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pydantic import BaseModel
 from models import ButtonLabelsBase, Tree, SettingsBase, SwitchState, PulseGenInfo
 import json
+from sqlalchemy import text
 
 # Define a base Pydantic model for the labels (used for request/response structure)
 
@@ -69,6 +70,16 @@ def get_session():
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
+    # Lightweight migrations for SQLite
+    with engine.connect() as conn:
+        # Ensure title_label exists on settings table
+        res = conn.exec_driver_sql("PRAGMA table_info('settings')").fetchall()
+        cols = {row[1] for row in res} if res else set()
+        if "title_label" not in cols:
+            conn.exec_driver_sql(
+                "ALTER TABLE settings ADD COLUMN title_label TEXT DEFAULT 'Title Here'"
+            )
+            print("Added title_label column to settings table.")
     # Ensure the default label row exists
     with Session(engine) as session:
         # Use the DB model (ButtonLabels) here

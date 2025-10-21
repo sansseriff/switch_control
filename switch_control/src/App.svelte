@@ -7,7 +7,9 @@
 
   import { onMount } from "svelte";
 
-  import { tree } from "./state.svelte";
+  import { tree } from "./tree_state.svelte";
+  import { config } from "./configuration.svelte";
+  import type { ButtonLabelState } from "./types";
   import TreeAndButtons from "./lib/TreeAndButtons.svelte";
   import MenuDialog from "./lib/MenuDialog.svelte";
   import TooltipIcon from "./lib/TooltipIcon.svelte";
@@ -19,6 +21,8 @@
   let inactivityMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
   let inactivityTimer: any = null;
 
+  // Title is now owned by configuration store
+  // Local alias that points to config.title_label via assignment in onMount
   let title_label = $state("Title Here");
   // Dynamic width for the title (h2/input) so it expands with text
   let titleWidthPx = $state(160);
@@ -46,7 +50,10 @@
 
     (async () => {
       // await new Promise((resolve) => setTimeout(resolve, 1));
-      await tree.init();
+  const initResp = await tree.init();
+  // Hydrate configuration from initialization response
+  config.hydrateFromInitialize(initResp);
+  title_label = config.title_label; // keep local alias in sync for width calc
       // even though I don't use the ouptut of tree.init(), its important that
       // that it returns a promise. Because awaiting that promise delays the
       // setting of isLoading to false. If isLoading is set to false too soon,
@@ -63,7 +70,7 @@
       window.addEventListener("mousemove", onActivity);
       window.addEventListener("keydown", onActivity);
       window.addEventListener("pointerdown", onActivity);
-      window.addEventListener("scroll", onActivity, { passive: true });
+  window.addEventListener("scroll", onActivity, { passive: true });
   window.addEventListener("resize", recomputeTitleWidth);
     })();
 
@@ -87,11 +94,41 @@
 
   // Recompute width reactively when text or mode changes
   $effect(() => {
-    title_label;
-    tree.button_mode;
-    // Use a microtask to let DOM/text update before measuring
+    // Keep config.title_label and local title_label in sync
+    config.title_label;
+    title_label = config.title_label;
+    // Recompute on edits/changes
+    config.is_editing;
     queueMicrotask(recomputeTitleWidth);
   });
+
+  // Handle finish from children: save labels + title, exit edit mode
+  async function onFinishConfiguration(labels: ButtonLabelState) {
+    // Replace all-empty with defaults
+    const allEmpty = Object.values(labels || {}).every((v) => v === "");
+    if (allEmpty) {
+      labels = {
+        label_0: "Ch 1",
+        label_1: "Ch 2",
+        label_2: "Ch 3",
+        label_3: "Ch 4",
+        label_4: "Ch 5",
+        label_5: "Ch 6",
+        label_6: "Ch 7",
+        label_7: "Ch 8",
+      };
+    }
+    // Update config state first for immediate UI feedback
+    config.button_labels = labels;
+    config.title_label = title_label;
+    try {
+      await config.saveAll(labels);
+      config.is_editing = false;
+    } catch (err) {
+      console.error("Failed to save configuration:", err);
+      // Stay in edit mode on error
+    }
+  }
 </script>
 
 <main>
@@ -108,7 +145,7 @@
 
   <div class="main-content">
     <div class="title-holder">
-      {#if tree.button_mode}
+    {#if !config.is_editing}
         <h2 class="input-label" style={`width: ${titleWidthPx}px`}>{title_label}</h2>
       {:else}
         <input
@@ -116,7 +153,7 @@
           type="text"
           size="10"
           placeholder={"Title Here"}
-          bind:value={title_label}
+      bind:value={config.title_label}
           style={`width: ${titleWidthPx}px`}
         />
       {/if}
@@ -139,7 +176,11 @@
         </div>
       {:else}
         <div class="inside">
-          <TreeAndButtons></TreeAndButtons>
+          <TreeAndButtons
+            labels={config.button_labels}
+            isEditing={config.is_editing}
+            onFinishConfiguration={onFinishConfiguration}
+          />
           <div class="title-spacer"></div>
           <!-- <div class="title-holder"></div> -->
         </div>
@@ -147,7 +188,7 @@
           <div class="bottom-group">
             <TooltipIcon
               label={"Edit Configuration"}
-              onclick={() => (tree.button_mode = false)}
+              onclick={() => (config.is_editing = true)}
             >
               <PencilSimple size={25} />
             </TooltipIcon>
@@ -171,17 +212,14 @@
     class="input-label measure"
     aria-hidden="true"
     bind:this={measureEl}
-  >{title_label}</span>
+  >{config.title_label}</span>
 </main>
 
 <style>
   h2 {
     color: rgb(152, 152, 152);
   }
-  .top-group {
-    /* width: 100%;
-    height: 100%; */
-  }
+  /* .top-group reserved for future layout rules */
 
   .icon-holder {
     display: flex;

@@ -3,7 +3,7 @@
   import X from "phosphor-svelte/lib/X";
   import DotsThreeVertical from "phosphor-svelte/lib/DotsThreeVertical";
   import GeneralButton from "./GeneralButton.svelte";
-  import { tree } from "../state.svelte";
+  import { tree } from "../tree_state.svelte";
   import { Popover } from "bits-ui";
   // base dialog styles
   import "../dialog.css";

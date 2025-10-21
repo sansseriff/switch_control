@@ -53,6 +53,8 @@ class SettingsBase(BaseModel):
     cryo_voltage: float = 2.5
     regular_voltage: float = 5.0
     tree_memory_mode: bool = False
+    # UI configuration
+    title_label: str = "Title Here"
     # Pulse generator persistence/config
     pulse_generator_kind: str = "dev"  # one of: dev | keysight | client
     pulse_generator_ip: Optional[str] = None
