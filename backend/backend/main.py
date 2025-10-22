@@ -148,7 +148,7 @@ class CryoRelayManager:
         # I have another program that accesses the keysight supply at the 
         # same time. Using sockets and a client connection to allow
         # multiple python processes to access the VISA device
-        self.amp_protector = AmpProtector(on=True, disabled=True, use_client=True)
+        self.amp_protector = AmpProtector(on=True, disabled=False, use_client=True)
 
     def cleanup(self):
         self.pulse_controller.cleanup()
@@ -736,6 +736,7 @@ def update_button_labels(
 @app.get("/preemptive_amp_shutoff")
 def preemptive_amp_shutoff(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
     v: CryoRelayManager = cryo
+
     v.amp_protector.turn_off_amp()
 
 
