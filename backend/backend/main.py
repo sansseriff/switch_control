@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi import Depends
+from starlette.responses import StreamingResponse
 
 import time
 import webview
@@ -90,6 +91,10 @@ class CryoRelayManager:
     def __init__(self, function_gen: bool = True):
         # Initialize switch and synchronization
         self.lock = threading.Lock()
+        # Event loop reference for cross-thread scheduling (set by lifespan)
+        self.loop: asyncio.AbstractEventLoop | None = None
+        # SSE subscribers: each is an asyncio.Queue of JSON strings
+        self.subscribers: set[asyncio.Queue[str]] = set()
 
         if function_gen:
             # override!!
@@ -153,6 +158,40 @@ class CryoRelayManager:
     def cleanup(self):
         self.pulse_controller.cleanup()
 
+    # ============== SSE helper methods ==============
+    async def _broadcast_json(self, json_str: str):
+        """Broadcast a JSON string to all subscribers without blocking.
+        Removes subscribers that are no longer accepting messages.
+        """
+        to_remove: list[asyncio.Queue[str]] = []
+        for q in list(self.subscribers):
+            try:
+                q.put_nowait(json_str)
+            except asyncio.QueueFull:
+                to_remove.append(q)
+            except Exception:
+                to_remove.append(q)
+        for q in to_remove:
+            self.subscribers.discard(q)
+
+    async def broadcast_tree(self):
+        """Serialize current tree_state and broadcast to all subscribers."""
+        try:
+            json_str = self.tree.tree_state.model_dump_json()
+        except Exception:
+            # Fallback: build from flatten_tree if needed
+            json_str = flatten_tree(self.top_node).model_dump_json()
+        await self._broadcast_json(json_str)
+
+    def broadcast_tree_sync(self):
+        """Schedule broadcast_tree from non-async contexts (e.g., threadpool)."""
+        if self.loop and self.loop.is_running():
+            try:
+                asyncio.run_coroutine_threadsafe(self.broadcast_tree(), self.loop)
+            except RuntimeError:
+                # Loop may be closed; ignore
+                pass
+
 
 
 class Services:
@@ -171,6 +210,8 @@ async def lifespan(app: FastAPI):
     print("Database and tables created.")
     # Initialize hardware/services once for the process
     cryo_manager = await asyncio.to_thread(CryoRelayManager, FUNCTION_GEN)
+    # Store current running loop so CryoRelayManager can schedule async work from threads
+    cryo_manager.loop = asyncio.get_running_loop()
     app.state.services = Services(cryo=cryo_manager)
     yield
     # Code to run on shutdown (if any)
@@ -285,6 +326,51 @@ app.mount("/assets", StaticFiles(directory=Path(WEB_DIR, "assets")), name="")
 async def return_index(request: Request):
     mimetypes.add_type("application/javascript", ".js")
     return FileResponse(Path(WEB_DIR, "index.html"))
+
+
+# ============== Server-Sent Events endpoint ==============
+@app.get("/events")
+async def sse_events(request: Request, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
+    """Stream TreeState updates to clients using Server-Sent Events (SSE).
+
+    Each message is a JSON-serialized Tree (matching the /tree shape) in a
+    standard SSE 'data: ...\n\n' frame. Sends an initial snapshot immediately
+    after subscribing, then streams subsequent updates.
+    """
+
+    async def event_generator():
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=32)
+        # Register this client
+        cryo.subscribers.add(queue)
+        try:
+            # Send the initial state right away
+            await queue.put(cryo.tree.tree_state.model_dump_json())
+            while True:
+                # Disconnect handling via timeout + polling
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    # Keep-alive comment to prevent proxies from closing the connection
+                    yield ": keep-alive\n\n"
+                    continue
+                # Normal data frame
+                yield f"data: {data}\n\n"
+        finally:
+            # Cleanup subscriber
+            try:
+                cryo.subscribers.discard(queue)
+            except Exception:
+                pass
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        # Allow CORS preflight to succeed for browsers
+        "Access-Control-Allow-Origin": "*",
+    }
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 
 def flatten_tree(root: MaybeNode) -> Tree:
@@ -454,8 +540,14 @@ def channel_to_state(
                 idx = int(current_node.relay_index)
                 v.pulse_controller.flip_left(idx, verification)
         current_node = current_node.to_next()
+        # After each step, compute and broadcast the intermediate tree state
+        update_color(v)
+        v.tree.tree_state = flatten_tree(v.top_node)
+        v.broadcast_tree_sync()
+    # Final state snapshot
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
+    v.broadcast_tree_sync()
 
     v.amp_protector.turn_on_if_previously_on()
     v.pulse_controller.block_pulser(verification)

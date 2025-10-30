@@ -1,5 +1,5 @@
 import type { TreeState, SwitchState } from "./types";
-import { reset, flipSwitch, reAssert, requestChannel, preemptiveAmpShutoff, updateSettings, initialize } from "./api";
+import { reset, flipSwitch, reAssert, requestChannel, preemptiveAmpShutoff, updateSettings, initialize, subscribeToTreeEvents } from "./api";
 import type { Verification } from "./types";
 import type { InitializationResponse } from "./api";
 
@@ -29,6 +29,12 @@ class Tree {
 
   // Initialize tree state and settings (labels/title handled by configuration)
   init() {
+    // Start SSE subscription first to receive any immediate updates
+    subscribeToTreeEvents((tree) => {
+      // Live update the diagram while switching; do not update buttons here
+      this.st = tree;
+    });
+
     return initialize().then((response: InitializationResponse) => {
       this.st = response.tree_state;
       // Initialize settings
