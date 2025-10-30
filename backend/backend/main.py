@@ -135,10 +135,9 @@ class CryoRelayManager:
         )
         self.tree = T(tree_state=self.tree_state, activated_channel=0)
 
-
-        # if this is enabled, and the supply is not connected, 
+        # if this is enabled, and the supply is not connected,
         # you'll get an indecipherable error
-        # I have another program that accesses the keysight supply at the 
+        # I have another program that accesses the keysight supply at the
         # same time. Using sockets and a client connection to allow
         # multiple python processes to access the VISA device
         self.amp_protector = AmpProtector(on=True, disabled=True, use_client=True)
@@ -224,11 +223,10 @@ FRAMELESS: bool = False
 
 def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
 
-
-    # NOTE: you NEED this on some computers. If the fastapi server isn't ready, then the webview hangs with a blank white page. 
-    time.sleep(0.3) 
+    # NOTE: you NEED this on some computers. If the fastapi server isn't ready, then the webview hangs with a blank white page.
+    time.sleep(0.3)
     # TODO: figure out how to send a message from fastapi to pywebview that it's ready
-    
+
     def on_closed():
         pipe_send.send("closed")
 
@@ -407,7 +405,6 @@ def channel_to_state(
     v: CryoRelayManager = cryo
     v.amp_protector.turn_off_amp()
 
-
     if channel < 0 or channel > 7:
         print("Invalid channel number, stopping.")
         return
@@ -522,6 +519,7 @@ def get_tree(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
     # tree is always available after lifespan init
     return cryo.tree.tree_state
 
+
 @app.get("/tree/persisted", response_model=Tree)
 def get_persisted_tree(session: DBSession):
     row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
@@ -577,7 +575,9 @@ async def initialize(
         # Apply pulse amplitude based on cryo mode
         if isinstance(cryo.pulse_controller, FunctionGeneratorPulseController):
             cryo.pulse_controller.pulse_amplitude = (
-                settings.cryo_voltage if settings.cryo_mode else settings.regular_voltage
+                settings.cryo_voltage
+                if settings.cryo_mode
+                else settings.regular_voltage
             )
 
         # Ensure pulse generator matches persisted settings with fallback
@@ -701,13 +701,14 @@ def preemptive_amp_shutoff(cryo: Annotated[CryoRelayManager, Depends(get_cryo)])
     v: CryoRelayManager = cryo
     v.amp_protector.turn_off_amp()
 
-
     return v.tree.tree_state
+
 
 @app.get("/cryo_mode")
 def set_cryo_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
     v: CryoRelayManager = cryo
     v.pulse_controller.cryo_mode()
+
 
 @app.get("/room_temp_mode")
 def set_room_temp_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
@@ -795,7 +796,6 @@ def _ensure_pulse_generator(
         created=created,
         message=message,
     )
-
 
 
 @app.post("/switch")
