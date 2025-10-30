@@ -400,19 +400,19 @@ class FunctionGeneratorPulseController(PulseController):
 
     def flip_left(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
-        time.sleep(0.15)
+        time.sleep(0.05)
         print("SENDING POSITIVE PULSE")
         self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
-        time.sleep(0.1)
+        time.sleep(0.05)
 
         time.sleep(EXTRA_SLEEP_TIME)
 
     def flip_right(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
-        time.sleep(0.15)
+        time.sleep(0.05)
         print("SENDING NEGATIVE PULSE")
         self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")
-        time.sleep(0.1)
+        time.sleep(0.05)
         time.sleep(EXTRA_SLEEP_TIME)
 
     def wire_switch(self, channel: int, verification: Verification):
@@ -457,7 +457,7 @@ class FunctionGeneratorPulseController(PulseController):
     def unblock_pulser(self, verification: Verification):
         print("turning on the protection relay")
         self.relay_board.turn_on(0, verification)
-        time.sleep(0.1)
+        time.sleep(0.05)
 
     def block_pulser(self, verification: Verification):
         print("turning off the protection relay")

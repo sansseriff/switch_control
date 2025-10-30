@@ -213,7 +213,7 @@ class PulseGenResponse(BaseModel):
 mimetypes.init()
 
 PULSE_TIME = 50
-SLEEP_TIME = 0.050
+SLEEP_TIME = 0.030
 FRAMELESS: bool = False
 
 
