@@ -3,11 +3,16 @@ import type { TreeState, ButtonLabelState, Settings } from "./types"; // Add But
 import type { Verification } from "./types";
 
 
-function isPywebview() {
+export function isPywebview() {
     return typeof (window as any).QObject !== 'undefined';
 }
 
 
+
+export function getBaseUrl() {
+    const isWebView = isPywebview();
+    return isWebView ? "http://localhost:8854" : "";
+}
 
 function fetchWithConfig(url: string, method: string, body?: any): Promise<any> {
     const headers = { 'Content-Type': 'application/json' };
@@ -16,10 +21,7 @@ function fetchWithConfig(url: string, method: string, body?: any): Promise<any> 
 
     // Specify the base URL of the different server
 
-    const isWebView = isPywebview();
-    console.log("isWebView: ", isWebView);
-
-    const baseUrl = isWebView ? "http://localhost:8854" : "";
+    const baseUrl = getBaseUrl();
 
     const config: RequestInit = {
         method,
@@ -39,6 +41,31 @@ function fetchWithConfig(url: string, method: string, body?: any): Promise<any> 
             // console.log("returning!")
             return response.json();
         });
+}
+
+// SSE subscription for live TreeState updates
+export function subscribeToTreeEvents(onTree: (tree: TreeState) => void): EventSource | null {
+    try {
+        const baseUrl = getBaseUrl();
+        const url = `${baseUrl}/events`;
+        const es = new EventSource(url);
+        es.onmessage = (ev) => {
+            try {
+                const data = JSON.parse(ev.data) as TreeState;
+                onTree(data);
+            } catch (e) {
+                console.error("Failed to parse SSE data:", e);
+            }
+        };
+        es.onerror = (e) => {
+            // Browser will auto-reconnect; log once
+            // console.debug("SSE error", e);
+        };
+        return es;
+    } catch (e) {
+        console.error("Failed to start SSE:", e);
+        return null;
+    }
 }
 
 

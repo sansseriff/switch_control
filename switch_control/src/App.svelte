@@ -7,7 +7,9 @@
 
   import { onMount } from "svelte";
 
-  import { tree } from "./state.svelte";
+  import { tree } from "./tree_state.svelte";
+  import { config } from "./configuration.svelte";
+  import type { ButtonLabelState } from "./types";
   import TreeAndButtons from "./lib/TreeAndButtons.svelte";
   import MenuDialog from "./lib/MenuDialog.svelte";
   import TooltipIcon from "./lib/TooltipIcon.svelte";
@@ -19,7 +21,28 @@
   let inactivityMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
   let inactivityTimer: any = null;
 
+  // Title is now owned by configuration store
+  // Local alias that points to config.title_label via assignment in onMount
   let title_label = $state("Title Here");
+  // Dynamic width for the title (h2/input) so it expands with text
+  let titleWidthPx = $state(160);
+  let measureEl: HTMLElement | null = null;
+
+  function recomputeTitleWidth() {
+    // Use placeholder text when empty so the control doesn't collapse
+    const text = (title_label && title_label.trim() !== "")
+      ? title_label
+      : "Title Here";
+    if (!measureEl) return;
+    // Update the hidden measurement element's text then read its width
+    measureEl.textContent = text;
+    // Include a small ceil to avoid sub-pixel clipping
+    const measured = Math.ceil(measureEl.offsetWidth);
+    // Minimum width similar to prior ~5rem default for stability
+    const rootFs = parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+    const minPx = 5 * (Number.isNaN(rootFs) ? 16 : rootFs);
+    titleWidthPx = Math.max(minPx, measured);
+  }
 
   onMount(() => {
     let disposed = false;
@@ -27,7 +50,10 @@
 
     (async () => {
       // await new Promise((resolve) => setTimeout(resolve, 1));
-      await tree.init();
+  const initResp = await tree.init();
+  // Hydrate configuration from initialization response
+  config.hydrateFromInitialize(initResp);
+  title_label = config.title_label; // keep local alias in sync for width calc
       // even though I don't use the ouptut of tree.init(), its important that
       // that it returns a promise. Because awaiting that promise delays the
       // setting of isLoading to false. If isLoading is set to false too soon,
@@ -35,6 +61,8 @@
       // api calls to get_tree before the tree is initialized. Causing an error.
       if (disposed) return;
       isLoading = false;
+  // Ensure initial width is computed once fonts/styles have applied
+  recomputeTitleWidth();
 
       // start inactivity monitor after init
       resetInactivityTimer();
@@ -42,7 +70,8 @@
       window.addEventListener("mousemove", onActivity);
       window.addEventListener("keydown", onActivity);
       window.addEventListener("pointerdown", onActivity);
-      window.addEventListener("scroll", onActivity, { passive: true });
+  window.addEventListener("scroll", onActivity, { passive: true });
+  window.addEventListener("resize", recomputeTitleWidth);
     })();
 
     return () => {
@@ -51,6 +80,7 @@
       window.removeEventListener("keydown", onActivity);
       window.removeEventListener("pointerdown", onActivity);
       window.removeEventListener("scroll", onActivity);
+  window.removeEventListener("resize", recomputeTitleWidth);
       if (inactivityTimer) clearTimeout(inactivityTimer);
     };
   });
@@ -60,6 +90,44 @@
     inactivityTimer = setTimeout(() => {
       isCryoCheckOpen = true;
     }, inactivityMs);
+  }
+
+  // Recompute width reactively when text or mode changes
+  $effect(() => {
+    // Keep config.title_label and local title_label in sync
+    config.title_label;
+    title_label = config.title_label;
+    // Recompute on edits/changes
+    config.is_editing;
+    queueMicrotask(recomputeTitleWidth);
+  });
+
+  // Handle finish from children: save labels + title, exit edit mode
+  async function onFinishConfiguration(labels: ButtonLabelState) {
+    // Replace all-empty with defaults
+    const allEmpty = Object.values(labels || {}).every((v) => v === "");
+    if (allEmpty) {
+      labels = {
+        label_0: "Ch 1",
+        label_1: "Ch 2",
+        label_2: "Ch 3",
+        label_3: "Ch 4",
+        label_4: "Ch 5",
+        label_5: "Ch 6",
+        label_6: "Ch 7",
+        label_7: "Ch 8",
+      };
+    }
+    // Update config state first for immediate UI feedback
+    config.button_labels = labels;
+    config.title_label = title_label;
+    try {
+      await config.saveAll(labels);
+      config.is_editing = false;
+    } catch (err) {
+      console.error("Failed to save configuration:", err);
+      // Stay in edit mode on error
+    }
   }
 </script>
 
@@ -77,16 +145,16 @@
 
   <div class="main-content">
     <div class="title-holder">
-      {#if tree.button_mode}
-        <h2 class="input-label">{title_label}</h2>
+    {#if !config.is_editing}
+        <h2 class="input-label" style={`width: ${titleWidthPx}px`}>{title_label}</h2>
       {:else}
         <input
           class="input-label light"
           type="text"
           size="10"
           placeholder={"Title Here"}
-          bind:value={title_label}
-          style={`width: 10rem`}
+      bind:value={config.title_label}
+          style={`width: ${titleWidthPx}px`}
         />
       {/if}
 
@@ -108,7 +176,11 @@
         </div>
       {:else}
         <div class="inside">
-          <TreeAndButtons></TreeAndButtons>
+          <TreeAndButtons
+            labels={config.button_labels}
+            isEditing={config.is_editing}
+            onFinishConfiguration={onFinishConfiguration}
+          />
           <div class="title-spacer"></div>
           <!-- <div class="title-holder"></div> -->
         </div>
@@ -116,7 +188,7 @@
           <div class="bottom-group">
             <TooltipIcon
               label={"Edit Configuration"}
-              onclick={() => (tree.button_mode = false)}
+              onclick={() => (config.is_editing = true)}
             >
               <PencilSimple size={25} />
             </TooltipIcon>
@@ -135,16 +207,19 @@
 
   <MenuDialog bind:isOpen={isMenuOpen} />
   <CryoCheck bind:isOpen={isCryoCheckOpen} />
+  <!-- Hidden measurement element to compute exact width including padding/border -->
+  <span
+    class="input-label measure"
+    aria-hidden="true"
+    bind:this={measureEl}
+  >{config.title_label}</span>
 </main>
 
 <style>
   h2 {
     color: rgb(152, 152, 152);
   }
-  .top-group {
-    /* width: 100%;
-    height: 100%; */
-  }
+  /* .top-group reserved for future layout rules */
 
   .icon-holder {
     display: flex;
@@ -260,24 +335,21 @@
     appearance: none;
 
     box-sizing: border-box;
-    font-size: 0.875rem;
-    font-weight: 500;
-    border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.25rem;
 
-    padding-left: 0.2rem;
-    padding-right: 0.2rem;
-    padding-top: 0.25rem;
-    padding-bottom: 0.25rem;
+  padding-left: 0.2rem;
+  padding-right: 0.2rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
     height: 1.7rem;
 
     width: 5rem;
     font-family: Arial, Helvetica, sans-serif;
   }
 
-  .light {
-    color: #6b7280;
-    border: 1.5px solid #dfe2e9;
-  }
+  
 
   .light:hover {
     color: #181d25;
@@ -285,11 +357,43 @@
   }
 
   .input-label {
+    /* Make input and h2 occupy identical geometry so text doesn't jump when toggling */
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+  /* Keep as a single line and avoid flexbox shrinking */
+  white-space: nowrap;
+  flex: 0 0 auto;
+
+    /* Typography unified for both input and h2 */
+    font-family: Arial, Helvetica, sans-serif;
     font-size: large;
-    /* margin: 0.66rem; */
+    font-weight: 500;
+
+    /* Sizing + vertical centering */
     height: 2rem;
-    padding-top: 0.5rem;
+    line-height: 2rem;
+
+    /* Padding matches input so inner text position is identical */
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    padding-right: 0.2rem;
     padding-left: 0.5rem;
+
+    /* Remove default h2 top/bottom margins while preserving the left offset */
+    margin: 0;
+    margin-left: 0.25rem;
+
+    /* Reserve space for the editable border even in display mode */
+    border: 1.5px solid transparent;
+    border-radius: 0.25rem;
+  }
+
+  .light {
+    color: #6b7280;
+  /* Always show the border in edit mode */
+   border: 1.5px solid #dfe2e9; /* slightly stronger than #dfe2e9 */
+    background-color: #ffffff;
   }
 
   .inside {
@@ -308,6 +412,15 @@
 
   .title-spacer {
     height: 2.5rem;
+  }
+
+  /* Hidden measurement element used to size the title precisely */
+  .measure {
+    position: absolute;
+    visibility: hidden;
+    white-space: pre;
+    left: -9999px;
+    top: -9999px;
   }
 
   /* Media query for smaller screens */

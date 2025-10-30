@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi import Depends
+from starlette.responses import StreamingResponse
 
 import time
 import webview
@@ -35,6 +36,7 @@ from pulse_controller import (
     PulseController,
     SimpleRelayPulseController,
     FunctionGeneratorPulseController,
+    ClientKeysightPulseGenerator,
     make_pulse_generator,
 )
 from node import Node, MaybeNode
@@ -80,14 +82,26 @@ DBSession = Annotated[Session, Depends(get_session)]
 class CryoRelayManager:
     """
     Manages the cryogenic teledyne relays and their state.
+
+    CryoRelayManager is concerned with the layout of the cryogenic relays. NOT how they are actuated.
+
+    All the details of actuating a relay are left to the internal pulse_controller, for which there's multiple types.
     """
 
     def __init__(self, function_gen: bool = True):
         # Initialize switch and synchronization
         self.lock = threading.Lock()
+        # Event loop reference for cross-thread scheduling (set by lifespan)
+        self.loop: asyncio.AbstractEventLoop | None = None
+        # SSE subscribers: each is an asyncio.Queue of JSON strings
+        self.subscribers: set[asyncio.Queue[str]] = set()
 
         if function_gen:
-            self.pulse_controller: PulseController = FunctionGeneratorPulseController()
+            # override!!
+            self.pulse_controller: PulseController = FunctionGeneratorPulseController(
+                generator=ClientKeysightPulseGenerator()
+            )
+            # self.pulse_controller: PulseController = FunctionGeneratorPulseController()
         else:
             self.pulse_controller: PulseController = SimpleRelayPulseController()
 
@@ -140,10 +154,44 @@ class CryoRelayManager:
         # I have another program that accesses the keysight supply at the
         # same time. Using sockets and a client connection to allow
         # multiple python processes to access the VISA device
-        self.amp_protector = AmpProtector(on=True, disabled=True, use_client=True)
+        self.amp_protector = AmpProtector(on=True, disabled=False, use_client=True)
 
     def cleanup(self):
         self.pulse_controller.cleanup()
+
+    # ============== SSE helper methods ==============
+    async def _broadcast_json(self, json_str: str):
+        """Broadcast a JSON string to all subscribers without blocking.
+        Removes subscribers that are no longer accepting messages.
+        """
+        to_remove: list[asyncio.Queue[str]] = []
+        for q in list(self.subscribers):
+            try:
+                q.put_nowait(json_str)
+            except asyncio.QueueFull:
+                to_remove.append(q)
+            except Exception:
+                to_remove.append(q)
+        for q in to_remove:
+            self.subscribers.discard(q)
+
+    async def broadcast_tree(self):
+        """Serialize current tree_state and broadcast to all subscribers."""
+        try:
+            json_str = self.tree.tree_state.model_dump_json()
+        except Exception:
+            # Fallback: build from flatten_tree if needed
+            json_str = flatten_tree(self.top_node).model_dump_json()
+        await self._broadcast_json(json_str)
+
+    def broadcast_tree_sync(self):
+        """Schedule broadcast_tree from non-async contexts (e.g., threadpool)."""
+        if self.loop and self.loop.is_running():
+            try:
+                asyncio.run_coroutine_threadsafe(self.broadcast_tree(), self.loop)
+            except RuntimeError:
+                # Loop may be closed; ignore
+                pass
 
 
 class Services:
@@ -162,6 +210,8 @@ async def lifespan(app: FastAPI):
     print("Database and tables created.")
     # Initialize hardware/services once for the process
     cryo_manager = await asyncio.to_thread(CryoRelayManager, FUNCTION_GEN)
+    # Store current running loop so CryoRelayManager can schedule async work from threads
+    cryo_manager.loop = asyncio.get_running_loop()
     app.state.services = Services(cryo=cryo_manager)
     yield
     # Code to run on shutdown (if any)
@@ -204,8 +254,7 @@ class PulseGenResponse(BaseModel):
 mimetypes.init()
 
 PULSE_TIME = 50
-SLEEP_TIME = 0.050
-REMEMBER_STATE: bool = False
+SLEEP_TIME = 0.030
 FRAMELESS: bool = False
 
 
@@ -235,7 +284,7 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False):
         url=url_to_load,
         resizable=True,
         width=800,
-        height=412,
+        height=430,
         frameless=FRAMELESS,
         easy_drag=False,
     )
@@ -278,6 +327,55 @@ async def return_index(request: Request):
     return FileResponse(Path(WEB_DIR, "index.html"))
 
 
+# ============== Server-Sent Events endpoint ==============
+@app.get("/events")
+async def sse_events(
+    request: Request, cryo: Annotated[CryoRelayManager, Depends(get_cryo)]
+):
+    """Stream TreeState updates to clients using Server-Sent Events (SSE).
+
+    Each message is a JSON-serialized Tree (matching the /tree shape) in a
+    standard SSE 'data: ...\n\n' frame. Sends an initial snapshot immediately
+    after subscribing, then streams subsequent updates.
+    """
+
+    async def event_generator():
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=32)
+        # Register this client
+        cryo.subscribers.add(queue)
+        try:
+            # Send the initial state right away
+            await queue.put(cryo.tree.tree_state.model_dump_json())
+            while True:
+                # Disconnect handling via timeout + polling
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    # Keep-alive comment to prevent proxies from closing the connection
+                    yield ": keep-alive\n\n"
+                    continue
+                # Normal data frame
+                yield f"data: {data}\n\n"
+        finally:
+            # Cleanup subscriber
+            try:
+                cryo.subscribers.discard(queue)
+            except Exception:
+                pass
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        # Allow CORS preflight to succeed for browsers
+        "Access-Control-Allow-Origin": "*",
+    }
+    return StreamingResponse(
+        event_generator(), media_type="text/event-stream", headers=headers
+    )
+
+
 def flatten_tree(root: MaybeNode) -> Tree:
     # Initialize defaults
     r_states: dict[str, SwitchState] = {
@@ -313,6 +411,7 @@ def init_tree(verification: Verification, cryo: CryoRelayManager):
     v: CryoRelayManager = cryo
 
     v.amp_protector.turn_off_amp()
+    v.pulse_controller.unblock_pulser(verification)
 
     # v.pulse_controller.turn_on(0, verification)
     with v.lock:
@@ -329,12 +428,15 @@ def init_tree(verification: Verification, cryo: CryoRelayManager):
 
     v.amp_protector.turn_on_if_previously_on()
 
+    v.pulse_controller.block_pulser(verification)
+
     return v.tree.tree_state
 
 
 def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
     v: CryoRelayManager = cryo
     v.amp_protector.turn_off_amp()
+    v.pulse_controller.unblock_pulser(verification)
     current_node = v.top_node
 
     with v.lock:
@@ -350,7 +452,9 @@ def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
 
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
+
     v.amp_protector.turn_on_if_previously_on()
+    v.pulse_controller.block_pulser(verification)
 
     return v.tree.tree_state
 
@@ -398,12 +502,14 @@ def channel_to_state(
     channel: int,
     verification: Verification,
     cryo: CryoRelayManager,
+    tree_memory_mode: bool,
 ):
     """
     take in user-numbering channel (1-8)
     """
     v: CryoRelayManager = cryo
     v.amp_protector.turn_off_amp()
+    v.pulse_controller.unblock_pulser(verification)
 
     if channel < 0 or channel > 7:
         print("Invalid channel number, stopping.")
@@ -424,22 +530,29 @@ def channel_to_state(
             return
         time.sleep(SLEEP_TIME)
         if bit[1] == "0":
-            if (not current_node.polarity) or (not REMEMBER_STATE):
+            if (not current_node.polarity) or (not tree_memory_mode):
                 current_node.polarity = True
                 idx = int(current_node.relay_index)
                 print(f"flip cryo relay {current_node.relay_index} left")
                 v.pulse_controller.flip_right(idx, verification)
         else:
-            if (current_node.polarity) or (not REMEMBER_STATE):
+            if (current_node.polarity) or (not tree_memory_mode):
                 print(f"flip cryo relay {current_node.relay_index} right")
                 current_node.polarity = False
                 idx = int(current_node.relay_index)
                 v.pulse_controller.flip_left(idx, verification)
         current_node = current_node.to_next()
+        # After each step, compute and broadcast the intermediate tree state
+        update_color(v)
+        v.tree.tree_state = flatten_tree(v.top_node)
+        v.broadcast_tree_sync()
+    # Final state snapshot
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
+    v.broadcast_tree_sync()
 
     v.amp_protector.turn_on_if_previously_on()
+    v.pulse_controller.block_pulser(verification)
 
     return v.tree.tree_state
 
@@ -501,7 +614,17 @@ def request_channel(
     session: DBSession,
 ):
     print("cryo-channel requested: ", channel.number)
-    state = channel_to_state(channel.number, channel.verification, cryo)
+    # Read current tree_memory_mode from settings so changes are honored at runtime
+    settings = session.exec(select(Settings).where(Settings.id == 1)).one_or_none()
+    if not settings:
+        settings = Settings(id=1)
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+
+    state = channel_to_state(
+        channel.number, channel.verification, cryo, bool(settings.tree_memory_mode)
+    )
     # persist
     if state is not None:
         row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
@@ -539,6 +662,8 @@ async def initialize(
     labels: ButtonLabels | None = None
     settings: Settings | None = None
 
+    ##
+
     try:
         # Load last saved tree state from DB (falls back to in-memory if missing)
         row = session.exec(select(TreeState).where(TreeState.id == 1)).one_or_none()
@@ -571,6 +696,11 @@ async def initialize(
             session.add(settings)
             session.commit()
             session.refresh(settings)
+
+        # override Settings.pulse
+
+        settings.pulse_generator_kind = "client"
+        settings.pulse_generator_ip = "10.9.0.18"
 
         # Apply pulse amplitude based on cryo mode
         if isinstance(cryo.pulse_controller, FunctionGeneratorPulseController):
@@ -699,6 +829,7 @@ def update_button_labels(
 @app.get("/preemptive_amp_shutoff")
 def preemptive_amp_shutoff(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
     v: CryoRelayManager = cryo
+
     v.amp_protector.turn_off_amp()
 
     return v.tree.tree_state
@@ -725,6 +856,7 @@ def switch_pulse_generator(
     Body:
     { "kind": "dev" | "keysight" | "client", "ip": "10.9.0.18" }
     """
+
     v: CryoRelayManager = cryo
     if not isinstance(v.pulse_controller, FunctionGeneratorPulseController):
         raise HTTPException(
@@ -757,6 +889,7 @@ def _ensure_pulse_generator(
     """
     v = cryo
     requested_kind = (settings.pulse_generator_kind or "dev").lower()
+    print(f"Requested pulse generator: {requested_kind}")
     requested_ip = settings.pulse_generator_ip
     created = True
     message = None
@@ -807,6 +940,7 @@ def toggle_switch(
     v: CryoRelayManager = cryo
 
     v.amp_protector.turn_off_amp()
+    v.pulse_controller.unblock_pulser(toggle.verification)
 
     sw = v.nodes[toggle.number - 1]
     # print("the switch to toggle: ", sw.relay_name)
@@ -825,6 +959,8 @@ def toggle_switch(
     v.tree.tree_state = flatten_tree(v.top_node)
 
     v.amp_protector.turn_on_if_previously_on()
+    v.pulse_controller.block_pulser(toggle.verification)
+
     return v.tree.tree_state
 
 

@@ -54,4 +54,6 @@ export interface Settings {
   cryo_voltage: number;
   regular_voltage: number;
   tree_memory_mode: boolean;
+  // Optional UI title persisted with settings
+  title_label?: string;
 }

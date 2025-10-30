@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi[standard]>=0.115.7",
-    "pyobjc>=11.1",
+    "pyobjc>=11.1 ; sys_platform != 'linux'",
     "pyserial>=3.5",
     "pyvisa>=1.15.0",
     "pyvisa-py>=0.8.0",

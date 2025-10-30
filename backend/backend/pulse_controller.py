@@ -12,6 +12,8 @@ from models import SwitchState, Tree, T
 FG_IP = os.getenv("FG_IP", "10.9.0.50")
 EXTRA_SLEEP_TIME = 0
 
+# self.fg = keysight33622A("10.9.0.18")
+
 
 class PulseGenerator(ABC):
     """
@@ -31,6 +33,10 @@ class PulseGenerator(ABC):
     @abstractmethod
     def setup_pulse(self, width: float) -> None:
         """Configure the pulse width (seconds)."""
+        pass
+
+    @abstractmethod
+    def setup_trigger(self, channel: int, source: str) -> None:
         pass
 
     @abstractmethod
@@ -63,6 +69,9 @@ class DevModePulseGenerator(PulseGenerator):
     def setup_pulse(self, width: float) -> None:
         print(f"[{self.name}] setup_pulse(width={width})")
 
+    def setup_trigger(self, channel, source: str) -> None:
+        print(f"[{self.name}] setup_trigger(channel={channel}, source={source})")
+
     def set_output(self, channel: int, enabled: int | bool) -> None:
         print(f"[{self.name}] set_output(channel={channel}, enabled={int(bool(enabled))})")
 
@@ -89,10 +98,14 @@ class KeysightPulseGenerator(PulseGenerator):
     def setup_pulse(self, width: float) -> None:
         self._impl.setup_pulse(width=width)
 
+    def setup_trigger(self, channel, source: str) -> None:
+        self._impl.setup_trigger(channel, source)
+
     def set_output(self, channel: int, enabled: int | bool) -> None:
         self._impl.set_output(channel, int(bool(enabled)))
 
     def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+        print(f"triggering with polarity: {polarity} and amplitude: {amplitude}")
         self._impl.trigger_with_polarity(channel, amplitude, polarity)
 
 
@@ -113,10 +126,15 @@ class ClientKeysightPulseGenerator(PulseGenerator):
     def setup_pulse(self, width: float) -> None:
         self._impl.setup_pulse(width=width)
 
+    def setup_trigger(self, channel, source: str) -> None:
+        self._impl.setup_trigger(channel, source)
+
     def set_output(self, channel: int, enabled: int | bool) -> None:
         self._impl.set_output(channel, int(bool(enabled)))
 
     def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+
+        print(f"triggering with polarity: {polarity} and amplitude: {amplitude}")
         self._impl.trigger_with_polarity(channel, amplitude, polarity)
 
 
@@ -159,6 +177,18 @@ class PulseController(ABC):
         """
         Set the pulse controller to room temperature mode.
         """
+        pass
+
+
+    @abstractmethod
+    def unblock_pulser(self, verification: Verification):
+        """
+        If a relay is set up to block a function generator from sending pulses,
+        this method will unblock it.
+        """
+
+    @abstractmethod
+    def block_pulser(self, verification: Verification):
         pass
 
     def initialize_relay(self):
@@ -241,11 +271,27 @@ class SimpleRelayPulseController(PulseController):
     def room_temp_mode(self):
         pass
 
+    def block_pulser(self, verification: Verification):
+        # no blocking system assumed
+        pass
+
+    def unblock_pulser(self, verification: Verification):
+        # no blocking system assumed
+        pass
+
 
 class FunctionGeneratorPulseController(PulseController):
     """
     A PulseController that uses a function generator to send voltage pulses to the
     cryogenic relays.
+
+    This class is concerned with wire switching using the relays. 
+
+    This class is NOT concerned with how the pulses are requested (client/direct). That's left to the
+    type of PulseGenerator chosen. 
+
+    FunctionGeneratorPulseController -> decide what relay to pulse when
+    PulseGenerator -> send the actual pulses
     """
 
     def __init__(
@@ -347,24 +393,26 @@ class FunctionGeneratorPulseController(PulseController):
             generator.connect()
             generator.setup_pulse(width=0.050)  # 50 ms
             generator.set_output(1, 1)
+            generator.setup_trigger(1, "BUS") # BUS/Manual allows triggering from python
+
         except Exception as e:
             print(f"Failed to initialize pulse generator: {e}")
 
     def flip_left(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
-        time.sleep(0.15)
+        time.sleep(0.05)
         print("SENDING POSITIVE PULSE")
         self.fg.trigger_with_polarity(1, self.pulse_amplitude, "POS")
-        time.sleep(0.1)
+        time.sleep(0.05)
 
         time.sleep(EXTRA_SLEEP_TIME)
 
     def flip_right(self, channel: int, verification: Verification):
         self.wire_switch(channel, verification)
-        time.sleep(0.15)
+        time.sleep(0.05)
         print("SENDING NEGATIVE PULSE")
         self.fg.trigger_with_polarity(1, self.pulse_amplitude, "NEG")
-        time.sleep(0.1)
+        time.sleep(0.05)
         time.sleep(EXTRA_SLEEP_TIME)
 
     def wire_switch(self, channel: int, verification: Verification):
@@ -406,7 +454,14 @@ class FunctionGeneratorPulseController(PulseController):
 
             current_node = current_node.to_next()
 
-        # time.sleep(10)
+    def unblock_pulser(self, verification: Verification):
+        print("turning on the protection relay")
+        self.relay_board.turn_on(0, verification)
+        time.sleep(0.05)
+
+    def block_pulser(self, verification: Verification):
+        print("turning off the protection relay")
+        self.relay_board.turn_off(0, verification)
 
     def cleanup(self):
         self.relay_board.Reset()
