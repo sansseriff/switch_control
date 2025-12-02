@@ -58,7 +58,7 @@ from typing import Any
 from pydantic import BaseModel
 
 # print("THISS: ", THISS)
-from location import WEB_DIR
+from location import WEB_DIR, BASE_DIR
 import mimetypes
 from uvicorn import Config, Server
 
@@ -73,7 +73,8 @@ from db import (
     TreeState,
 )
 
-FUNCTION_GEN = True
+# ENABLED = True
+# FUNCTION_GEN = True
 
 # Define the annotated dependency
 DBSession = Annotated[Session, Depends(get_session)]
@@ -88,7 +89,7 @@ class CryoRelayManager:
     All the details of actuating a relay are left to the internal pulse_controller, for which there's multiple types.
     """
 
-    def __init__(self, function_gen: bool = True):
+    def __init__(self, enabled: bool = False, function_gen: bool = True):
         # Initialize switch and synchronization
         self.lock = threading.Lock()
         # Event loop reference for cross-thread scheduling (set by lifespan)
@@ -98,12 +99,13 @@ class CryoRelayManager:
 
         if function_gen:
             # override!!
-            self.pulse_controller: PulseController = FunctionGeneratorPulseController(
+            self._pulse_controller: PulseController = FunctionGeneratorPulseController(
                 generator=ClientKeysightPulseGenerator()
             )
-            # self.pulse_controller: PulseController = FunctionGeneratorPulseController()
         else:
-            self.pulse_controller: PulseController = SimpleRelayPulseController()
+            self._pulse_controller: PulseController = SimpleRelayPulseController()
+
+        self.enabled = enabled
 
         # Initialize nodes
         self.nodes = [Node(f"R{i}") for i in range(1, 8)]
@@ -154,10 +156,10 @@ class CryoRelayManager:
         # I have another program that accesses the keysight supply at the
         # same time. Using sockets and a client connection to allow
         # multiple python processes to access the VISA device
-        self.amp_protector = AmpProtector(on=True, disabled=False, use_client=True)
+        self._amp_protector = AmpProtector(on=True, disabled=False, use_client=True)
 
     def cleanup(self):
-        self.pulse_controller.cleanup()
+        self._pulse_controller.cleanup()
 
     # ============== SSE helper methods ==============
     async def _broadcast_json(self, json_str: str):
@@ -193,6 +195,106 @@ class CryoRelayManager:
                 # Loop may be closed; ignore
                 pass
 
+    # ============== Pass Through Functions ==============
+    # control of internal pulse controller and amp protector that is disable-aware
+
+    def turn_off_amp(self):
+        if self.enabled:
+            self._amp_protector.turn_off_amp()
+
+    def flip_left(self, index: int, verification: Verification):
+        if self.enabled:
+            self._pulse_controller.flip_left(index, verification)
+
+    def flip_right(self, index: int, verification: Verification):
+        if self.enabled:
+            self._pulse_controller.flip_right(index, verification)
+
+    def unblock_pulser(self, verification: Verification):
+        if self.enabled:
+            self._pulse_controller.unblock_pulser(verification)
+
+    def block_pulser(self, verification: Verification):
+        if self.enabled:
+            self._pulse_controller.block_pulser(verification)
+
+    def turn_on_if_previously_on(self):
+        if self.enabled:
+            self._amp_protector.turn_on_if_previously_on()
+
+    # ============== Controlled accessors ==============
+
+    def set_pulse_amplitude_from_settings(self, settings: "Settings") -> None:
+        """Apply pulse amplitude based on settings if controller supports it."""
+        if isinstance(self._pulse_controller, FunctionGeneratorPulseController):
+            self._pulse_controller.pulse_amplitude = (
+                settings.cryo_voltage
+                if settings.cryo_mode
+                else settings.regular_voltage
+            )
+
+    def ensure_pulse_generator(
+        self, settings: "Settings", session: "Session"
+    ) -> PulseGenInfo:
+        """Ensure the FunctionGeneratorPulseController has the generator from settings.
+        Fall back to dev on failure and persist the effective kind.
+        """
+        requested_kind = (settings.pulse_generator_kind or "dev").lower()
+        print(f"Requested pulse generator: {requested_kind}")
+        requested_ip = settings.pulse_generator_ip
+        created = True
+        message: str | None = None
+
+        if not isinstance(self._pulse_controller, FunctionGeneratorPulseController):
+            active_kind = "simple-relay"
+            return PulseGenInfo(
+                requested_kind=requested_kind,
+                requested_ip=requested_ip,
+                active_kind=active_kind,
+                created=True,
+                message="Simple relay controller in use; no external generator",
+            )
+
+        try:
+            gen = make_pulse_generator(requested_kind, requested_ip)
+            self._pulse_controller.set_generator(gen)
+            active_kind = requested_kind
+        except Exception as e:  # pragma: no cover - hardware dependent
+            created = False
+            message = f"Falling back to dev generator: {e}"
+            gen = make_pulse_generator("dev", None)
+            self._pulse_controller.set_generator(gen)
+            active_kind = "dev"
+
+        # Persist the active kind in settings if it changed
+        if settings.pulse_generator_kind != active_kind:
+            settings.pulse_generator_kind = active_kind
+            session.add(settings)
+            session.commit()
+            session.refresh(settings)
+
+        return PulseGenInfo(
+            requested_kind=requested_kind,
+            requested_ip=requested_ip,
+            active_kind=active_kind,
+            created=created,
+            message=message,
+        )
+
+    def set_cryo_mode(self) -> None:
+        """Switch controller into cryo mode if supported."""
+        if isinstance(self._pulse_controller, FunctionGeneratorPulseController):
+            self._pulse_controller.cryo_mode()
+
+    def set_room_temp_mode(self) -> None:
+        """Switch controller into room temperature mode if supported."""
+        if isinstance(self._pulse_controller, FunctionGeneratorPulseController):
+            self._pulse_controller.room_temp_mode()
+
+    def supports_external_pulse_generator(self) -> bool:
+        """Return True if the underlying controller can use external generators."""
+        return isinstance(self._pulse_controller, FunctionGeneratorPulseController)
+
 
 class Services:
     """Container for long-lived services"""
@@ -209,7 +311,15 @@ async def lifespan(app: FastAPI):
     create_db_and_tables()
     print("Database and tables created.")
     # Initialize hardware/services once for the process
-    cryo_manager = await asyncio.to_thread(CryoRelayManager, FUNCTION_GEN)
+
+    with open(Path(BASE_DIR, "system_settings.yml"), "r") as f:
+        import yaml
+
+        settings_data = yaml.safe_load(f)
+        ENABLED = settings_data.get("enabled", False)
+        FUNCTION_GEN = settings_data.get("function_gen", True)
+
+    cryo_manager = await asyncio.to_thread(CryoRelayManager, ENABLED, FUNCTION_GEN)
     # Store current running loop so CryoRelayManager can schedule async work from threads
     cryo_manager.loop = asyncio.get_running_loop()
     app.state.services = Services(cryo=cryo_manager)
@@ -410,8 +520,8 @@ def flatten_tree(root: MaybeNode) -> Tree:
 def init_tree(verification: Verification, cryo: CryoRelayManager):
     v: CryoRelayManager = cryo
 
-    v.amp_protector.turn_off_amp()
-    v.pulse_controller.unblock_pulser(verification)
+    v.turn_off_amp()
+    v.unblock_pulser(verification)
 
     # v.pulse_controller.turn_on(0, verification)
     with v.lock:
@@ -419,33 +529,33 @@ def init_tree(verification: Verification, cryo: CryoRelayManager):
             # time.sleep(SLEEP_TIME)
             node.polarity = False
             idx = int(node.relay_index)
-            v.pulse_controller.flip_left(idx, verification)
+            v.flip_left(idx, verification)
 
     # app.state.v.switch.turn_off(0, verification)
 
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
 
-    v.amp_protector.turn_on_if_previously_on()
+    v.turn_on_if_previously_on()
 
-    v.pulse_controller.block_pulser(verification)
+    v.block_pulser(verification)
 
     return v.tree.tree_state
 
 
 def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
     v: CryoRelayManager = cryo
-    v.amp_protector.turn_off_amp()
-    v.pulse_controller.unblock_pulser(verification)
+    v.turn_off_amp()
+    v.unblock_pulser(verification)
     current_node = v.top_node
 
     with v.lock:
         while isinstance(current_node, Node):
             idx = int(current_node.relay_index)
             if current_node.polarity is True:
-                v.pulse_controller.flip_right(idx, verification)
+                v.flip_right(idx, verification)
             else:
-                v.pulse_controller.flip_left(idx, verification)
+                v.flip_left(idx, verification)
             current_node = current_node.to_next()
             if type(current_node) is int:
                 break
@@ -453,8 +563,8 @@ def re_assert_tree(verification: Verification, cryo: CryoRelayManager):
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
 
-    v.amp_protector.turn_on_if_previously_on()
-    v.pulse_controller.block_pulser(verification)
+    v.turn_on_if_previously_on()
+    v.block_pulser(verification)
 
     return v.tree.tree_state
 
@@ -508,8 +618,8 @@ def channel_to_state(
     take in user-numbering channel (1-8)
     """
     v: CryoRelayManager = cryo
-    v.amp_protector.turn_off_amp()
-    v.pulse_controller.unblock_pulser(verification)
+    v.turn_off_amp()
+    v.unblock_pulser(verification)
 
     if channel < 0 or channel > 7:
         print("Invalid channel number, stopping.")
@@ -534,13 +644,13 @@ def channel_to_state(
                 current_node.polarity = True
                 idx = int(current_node.relay_index)
                 print(f"flip cryo relay {current_node.relay_index} left")
-                v.pulse_controller.flip_right(idx, verification)
+                v.flip_right(idx, verification)
         else:
             if (current_node.polarity) or (not tree_memory_mode):
                 print(f"flip cryo relay {current_node.relay_index} right")
                 current_node.polarity = False
                 idx = int(current_node.relay_index)
-                v.pulse_controller.flip_left(idx, verification)
+                v.flip_left(idx, verification)
         current_node = current_node.to_next()
         # After each step, compute and broadcast the intermediate tree state
         update_color(v)
@@ -551,8 +661,8 @@ def channel_to_state(
     v.tree.tree_state = flatten_tree(v.top_node)
     v.broadcast_tree_sync()
 
-    v.amp_protector.turn_on_if_previously_on()
-    v.pulse_controller.block_pulser(verification)
+    v.turn_on_if_previously_on()
+    v.block_pulser(verification)
 
     return v.tree.tree_state
 
@@ -702,16 +812,11 @@ async def initialize(
         settings.pulse_generator_kind = "client"
         settings.pulse_generator_ip = "10.9.0.18"
 
-        # Apply pulse amplitude based on cryo mode
-        if isinstance(cryo.pulse_controller, FunctionGeneratorPulseController):
-            cryo.pulse_controller.pulse_amplitude = (
-                settings.cryo_voltage
-                if settings.cryo_mode
-                else settings.regular_voltage
-            )
+        # Apply pulse amplitude based on cryo mode (via manager helper)
+        cryo.set_pulse_amplitude_from_settings(settings)
 
         # Ensure pulse generator matches persisted settings with fallback
-        pulse_info = _ensure_pulse_generator(settings, cryo, session)
+        pulse_info = cryo.ensure_pulse_generator(settings, session)
 
         if not tree_state:
             # Should not happen if initialization logic above worked
@@ -785,11 +890,8 @@ def update_settings(
 
     print("after: ", settings)
 
-    # Apply to running controller
-    if isinstance(cryo.pulse_controller, FunctionGeneratorPulseController):
-        cryo.pulse_controller.pulse_amplitude = (
-            settings.cryo_voltage if settings.cryo_mode else settings.regular_voltage
-        )
+    # Apply to running controller via manager helper
+    cryo.set_pulse_amplitude_from_settings(settings)
 
     return settings
 
@@ -830,7 +932,7 @@ def update_button_labels(
 def preemptive_amp_shutoff(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
     v: CryoRelayManager = cryo
 
-    v.amp_protector.turn_off_amp()
+    v.turn_off_amp()
 
     return v.tree.tree_state
 
@@ -838,13 +940,13 @@ def preemptive_amp_shutoff(cryo: Annotated[CryoRelayManager, Depends(get_cryo)])
 @app.get("/cryo_mode")
 def set_cryo_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
     v: CryoRelayManager = cryo
-    v.pulse_controller.cryo_mode()
+    v.set_cryo_mode()
 
 
 @app.get("/room_temp_mode")
 def set_room_temp_mode(cryo: Annotated[CryoRelayManager, Depends(get_cryo)]):
     v: CryoRelayManager = cryo
-    v.pulse_controller.room_temp_mode()
+    v.set_room_temp_mode()
 
 
 @app.post("/pulse_generator", response_model=PulseGenResponse)
@@ -858,7 +960,7 @@ def switch_pulse_generator(
     """
 
     v: CryoRelayManager = cryo
-    if not isinstance(v.pulse_controller, FunctionGeneratorPulseController):
+    if not v.supports_external_pulse_generator():
         raise HTTPException(
             status_code=400,
             detail="Active PulseController does not support external pulse generators",
@@ -875,60 +977,10 @@ def switch_pulse_generator(
         session.add(settings)
         session.commit()
         session.refresh(settings)
-        info = _ensure_pulse_generator(settings, v, session)
+        info = v.ensure_pulse_generator(settings, session)
         return PulseGenResponse(ok=True, info=info)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to switch generator: {e}")
-
-
-def _ensure_pulse_generator(
-    settings: Settings, cryo: CryoRelayManager, session: Session
-) -> PulseGenInfo:
-    """Ensure the FunctionGeneratorPulseController has the generator from settings.
-    Fall back to dev on failure. Persist the effective kind back to settings if needed.
-    """
-    v = cryo
-    requested_kind = (settings.pulse_generator_kind or "dev").lower()
-    print(f"Requested pulse generator: {requested_kind}")
-    requested_ip = settings.pulse_generator_ip
-    created = True
-    message = None
-
-    if not isinstance(v.pulse_controller, FunctionGeneratorPulseController):
-        return PulseGenInfo(
-            requested_kind=requested_kind,
-            requested_ip=requested_ip,
-            active_kind="simple-relay",
-            created=True,
-            message="Simple relay controller in use; no external generator",
-        )
-
-    try:
-        gen = make_pulse_generator(requested_kind, requested_ip)
-        v.pulse_controller.set_generator(gen)
-        active_kind = requested_kind
-    except Exception as e:
-        # Fallback
-        created = False
-        message = f"Falling back to dev generator: {e}"
-        gen = make_pulse_generator("dev", None)
-        v.pulse_controller.set_generator(gen)
-        active_kind = "dev"
-
-    # Persist the active kind in settings if it changed
-    if settings.pulse_generator_kind != active_kind:
-        settings.pulse_generator_kind = active_kind
-        session.add(settings)
-        session.commit()
-        session.refresh(settings)
-
-    return PulseGenInfo(
-        requested_kind=requested_kind,
-        requested_ip=requested_ip,
-        active_kind=active_kind,
-        created=created,
-        message=message,
-    )
 
 
 @app.post("/switch")
@@ -939,27 +991,27 @@ def toggle_switch(
 ):
     v: CryoRelayManager = cryo
 
-    v.amp_protector.turn_off_amp()
-    v.pulse_controller.unblock_pulser(toggle.verification)
+    v.turn_off_amp()
+    v.unblock_pulser(toggle.verification)
 
     sw = v.nodes[toggle.number - 1]
     # print("the switch to toggle: ", sw.relay_name)
     with v.lock:
         if sw.polarity:
             idx = int(sw.relay_index)
-            v.pulse_controller.flip_left(idx, toggle.verification)
+            v.flip_left(idx, toggle.verification)
             sw.polarity = False
 
         else:
             idx = int(sw.relay_index)
-            v.pulse_controller.flip_right(idx, toggle.verification)
+            v.flip_right(idx, toggle.verification)
             sw.polarity = True
 
     update_color(v)
     v.tree.tree_state = flatten_tree(v.top_node)
 
-    v.amp_protector.turn_on_if_previously_on()
-    v.pulse_controller.block_pulser(toggle.verification)
+    v.turn_on_if_previously_on()
+    v.block_pulser(toggle.verification)
 
     return v.tree.tree_state
 
