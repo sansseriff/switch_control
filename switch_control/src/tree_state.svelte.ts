@@ -1,120 +1,79 @@
-import type { TreeState, SwitchState } from "./types";
-import { reset, flipSwitch, reAssert, requestChannel, preemptiveAmpShutoff, updateSettings, initialize, subscribeToTreeEvents } from "./api";
-import type { Verification } from "./types";
-import type { InitializationResponse } from "./api";
+import type { Settings, TreeState, Verification } from "./types";
+import { appState, runtime, waitForInitialState } from "./sync.svelte";
+
+const defaultTree: TreeState = {
+  R1: { pos: false, color: false },
+  R2: { pos: false, color: false },
+  R3: { pos: false, color: false },
+  R4: { pos: false, color: false },
+  R5: { pos: false, color: false },
+  R6: { pos: false, color: false },
+  R7: { pos: false, color: false },
+  activated_channel: 0,
+};
+
+const defaultSettings: Settings = {
+  cryo_mode: false,
+  cryo_voltage: 2.5,
+  regular_voltage: 5.0,
+  tree_memory_mode: false,
+  title_label: "Title Here",
+  pulse_generator_kind: "dev",
+  pulse_generator_ip: null,
+};
 
 class Tree {
-  st: TreeState = $state({
-    R1: { pos: false, color: false },
-    R2: { pos: false, color: false },
-    R3: { pos: false, color: false },
-    R4: { pos: false, color: false },
-    R5: { pos: false, color: false },
-    R6: { pos: false, color: false },
-    R7: { pos: false, color: false },
-    activated_channel: 0,
-  });
+  get st(): TreeState {
+    return appState.tree_state ?? defaultTree;
+  }
 
-  button_colors = $state([false, false, false, false, false, false, false, false]);
+  get settings(): Settings {
+    return appState.settings ?? defaultSettings;
+  }
 
-  // settings
-  cryo_mode: boolean = $state(false);
-  tree_memory_mode: boolean = $state(false);
-  cryo_voltage: number = $state(2.0);
-  regular_voltage: number = $state(2.0);
+  get cryo_mode() { return this.settings.cryo_mode; }
+  get tree_memory_mode() { return this.settings.tree_memory_mode; }
+  get cryo_voltage() { return this.settings.cryo_voltage; }
+  get regular_voltage() { return this.settings.regular_voltage; }
 
-  // UI editing state has been moved to configuration store
+  get button_colors(): boolean[] {
+    return Array.from(
+      { length: 8 },
+      (_, index) => index === this.st.activated_channel,
+    );
+  }
 
-  constructor() {}
-
-  // Initialize tree state and settings (labels/title handled by configuration)
   init() {
-    // Start SSE subscription first to receive any immediate updates
-    subscribeToTreeEvents((tree) => {
-      // Live update the diagram while switching; do not update buttons here
-      this.st = tree;
-    });
+    return waitForInitialState();
+  }
 
-    return initialize().then((response: InitializationResponse) => {
-      this.st = response.tree_state;
-      // Initialize settings
-      if (response.settings) {
-        this.cryo_mode = response.settings.cryo_mode;
-        this.cryo_voltage = response.settings.cryo_voltage;
-        this.regular_voltage = response.settings.regular_voltage;
-        this.tree_memory_mode = response.settings.tree_memory_mode;
-      }
-      this.updateButtons();
-      return response; // caller may pass to configuration.hydrateFromInitialize
+  async resetTree(verification: Verification) {
+    await runtime.sendCommand("reset_tree", { verification });
+  }
+
+  async reAssertTree(verification: Verification) {
+    await runtime.sendCommand("re_assert_tree", { verification });
+  }
+
+  async toggle(key: string, verification: Verification) {
+    await runtime.sendCommand("toggle_switch", {
+      number: Number.parseInt(key.slice(1), 10),
+      verification,
     });
   }
 
-  resetTree(verification: Verification) {
-    reset(verification).then((ss: TreeState) => {
-      this.st = ss;
-      this.updateButtons();
+  async toChannel(number: number, verification: Verification) {
+    await runtime.sendCommand("request_channel", { number, verification });
+  }
+
+  async preemptiveAmpShutoff() {
+    await runtime.sendCommand("preemptive_amp_shutoff");
+  }
+
+  async saveSettings(changes: Partial<Settings> = {}) {
+    await runtime.sendCommand("update_settings", {
+      settings: { ...this.settings, ...changes },
     });
-  }
-
-  reAssertTree(verification: Verification) {
-    reAssert(verification).then((ss: TreeState) => {
-      this.st = ss;
-      this.updateButtons();
-    });
-  }
-
-  toggle(key: string, verification: Verification) {
-    // key is "R1", "R2", etc.
-    // convert to idx
-    let idx = parseInt(key.slice(1));
-
-    flipSwitch({
-      number: idx,
-      verification: verification,
-    }).then((ss: TreeState) => {
-      this.st = ss;
-      this.updateButtons();
-    });
-  }
-
-  updateButtons() {
-    this.button_colors = this.button_colors.map(() => false);
-    if (this.st.activated_channel >= 0 && this.st.activated_channel < this.button_colors.length) {
-      this.button_colors[this.st.activated_channel] = true;
-    }
-  }
-
-  toChannel(idx: number, verification: Verification) {
-    requestChannel({
-      number: idx,
-      verification: verification,
-    }).then((ss: TreeState) => {
-      this.st = ss;
-      this.updateButtons();
-    });
-  }
-
-  preemptiveAmpShutoff() {
-    preemptiveAmpShutoff();
-  }
-
-  // Save settings to backend and update local state
-  saveSettings() {
-    const payload = {
-      cryo_mode: this.cryo_mode,
-      cryo_voltage: this.cryo_voltage,
-      regular_voltage: this.regular_voltage,
-      tree_memory_mode: this.tree_memory_mode,
-    };
-    updateSettings(payload)
-      .then((saved) => {
-        this.cryo_mode = saved.cryo_mode;
-        this.cryo_voltage = saved.cryo_voltage;
-        this.regular_voltage = saved.regular_voltage;
-      })
-      .catch((error) => {
-        console.error("Failed to save settings:", error);
-      });
   }
 }
 

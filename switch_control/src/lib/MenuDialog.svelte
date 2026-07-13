@@ -51,12 +51,12 @@
   });
 
   function applyAndClose() {
-    tree.cryo_mode = cryo;
-    tree.tree_memory_mode = memory;
-    tree.cryo_voltage = Number(cryoVoltage);
-    tree.regular_voltage = Number(regularVoltage);
-    // persist to backend
-    tree.saveSettings();
+    tree.saveSettings({
+      cryo_mode: cryo,
+      tree_memory_mode: memory,
+      cryo_voltage: Number(cryoVoltage),
+      regular_voltage: Number(regularVoltage),
+    });
     isOpen = false;
   }
 </script>

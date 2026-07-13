@@ -13,8 +13,7 @@
   let { isOpen = $bindable() }: Props = $props();
 
   function chooseMode(cryo: boolean) {
-    tree.cryo_mode = cryo;
-    tree.saveSettings();
+    tree.saveSettings({ cryo_mode: cryo });
     isOpen = false;
   }
 

@@ -21,7 +21,23 @@
   }>();
 
   // Local proxy for editing
-  let proxy_labels = $state({ ...props.labels });
+  let proxy_labels = $state<ButtonLabelState>({
+    label_0: "Ch 1",
+    label_1: "Ch 2",
+    label_2: "Ch 3",
+    label_3: "Ch 4",
+    label_4: "Ch 5",
+    label_5: "Ch 6",
+    label_6: "Ch 7",
+    label_7: "Ch 8",
+  });
+  let wasEditing = false;
+
+  $effect(() => {
+    const isEditing = props.isEditing;
+    if (!isEditing || !wasEditing) proxy_labels = { ...props.labels };
+    wasEditing = isEditing;
+  });
 
   // let button_mode = $state(true);
 

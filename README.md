@@ -8,7 +8,26 @@ The python program sends serial commands to an 8 channel [numato relay board](ht
 
 ![relay_board](./teledyne_relay_board.jpg)
 
-The python program entrypoint is located in `backend/backend/main.py`. It is a fastapi webserver, with integrated `pywebview` for hosting the user interface. The UI is compiled from a svelte project in `/switch_control`.
+The Python entrypoint is `backend/backend/main.py`. It uses lab-link with a
+Starlette server and an integrated `pywebview` window. The Svelte UI is built
+from `/switch_control`.
+
+The backend's `AppState` reactive model is the single live source of truth for
+the relay tree, active channel, labels, settings, and pulse-generator status.
+The browser receives snapshots and reactive JSON patches over lab-link's
+WebSocket and sends hardware operations as lab-link commands. There are no
+REST polling or server-sent-event state paths.
+
+Remote access is protected by a startup passphrase. QR/copy URLs carry the
+passphrase in the URL fragment; the login page exchanges it for a 12-hour
+HttpOnly, SameSite session cookie and removes it from the address bar before
+loading the UI. Plain LAN URLs show the passphrase form, and unauthenticated
+WebSocket connections are rejected before lab-link sends application state.
+Set `remote_access_passphrase` in `backend/backend/system_settings.yml` for a
+stable passphrase, or leave it null to generate a new one on each startup.
+
+This is a trusted-LAN convenience gate, not encrypted transport. Use HTTPS or
+a private overlay network when traffic confidentiality is required.
 
 Use `build_ui_and_run.sh` to compile the frontend user interface, copy it into the `/backend` directory, and start the python webserver using the `uv` python project manager.
 

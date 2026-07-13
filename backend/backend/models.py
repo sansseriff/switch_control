@@ -1,7 +1,4 @@
-from typing import Annotated
 from typing import Optional
-from fastapi import Depends
-from sqlmodel import Field, Session, SQLModel, create_engine, select
 from pydantic import BaseModel
 from verification import Verification
 

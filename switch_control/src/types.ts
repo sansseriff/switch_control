@@ -55,5 +55,23 @@ export interface Settings {
   regular_voltage: number;
   tree_memory_mode: boolean;
   // Optional UI title persisted with settings
-  title_label?: string;
+  title_label: string;
+  pulse_generator_kind: string;
+  pulse_generator_ip: string | null;
+}
+
+export interface PulseGeneratorInfo {
+  requested_kind: string | null;
+  requested_ip: string | null;
+  active_kind: string;
+  created: boolean;
+  message: string | null;
+}
+
+export interface AppState {
+  [key: string]: unknown;
+  tree_state: TreeState;
+  button_labels: ButtonLabelState;
+  settings: Settings;
+  pulse_generator: PulseGeneratorInfo;
 }

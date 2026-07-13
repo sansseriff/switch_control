@@ -4,6 +4,7 @@
   import { Plus } from "phosphor-svelte";
   import { PencilSimple } from "phosphor-svelte";
   import { ThermometerSimple, ThermometerCold } from "phosphor-svelte";
+  import { QrCodeIcon } from "phosphor-svelte";
 
   import { onMount } from "svelte";
 
@@ -14,10 +15,12 @@
   import MenuDialog from "./lib/MenuDialog.svelte";
   import TooltipIcon from "./lib/TooltipIcon.svelte";
   import CryoCheck from "./lib/CryoCheck.svelte";
+  import RemoteAccessDialog from "./lib/RemoteAccessDialog.svelte";
 
   let isLoading = $state(import.meta.env.SKIP_LOADING !== "true");
   let isMenuOpen = $state(false);
   let isCryoCheckOpen = $state(false);
+  let isRemoteAccessOpen = $state(false);
   let inactivityMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
   let inactivityTimer: any = null;
 
@@ -50,9 +53,7 @@
 
     (async () => {
       // await new Promise((resolve) => setTimeout(resolve, 1));
-  const initResp = await tree.init();
-  // Hydrate configuration from initialization response
-  config.hydrateFromInitialize(initResp);
+  await tree.init();
   title_label = config.title_label; // keep local alias in sync for width calc
       // even though I don't use the ouptut of tree.init(), its important that
       // that it returns a promise. Because awaiting that promise delays the
@@ -94,9 +95,7 @@
 
   // Recompute width reactively when text or mode changes
   $effect(() => {
-    // Keep config.title_label and local title_label in sync
-    config.title_label;
-    title_label = config.title_label;
+    if (!config.is_editing) title_label = config.title_label;
     // Recompute on edits/changes
     config.is_editing;
     queueMicrotask(recomputeTitleWidth);
@@ -119,10 +118,8 @@
       };
     }
     // Update config state first for immediate UI feedback
-    config.button_labels = labels;
-    config.title_label = title_label;
     try {
-      await config.saveAll(labels);
+      await config.saveAll(labels, title_label);
       config.is_editing = false;
     } catch (err) {
       console.error("Failed to save configuration:", err);
@@ -137,6 +134,12 @@
   <div class="top-menu-section">
     <TooltipIcon label={"Runtime settings"} onclick={() => (isMenuOpen = true)}>
       <Gear size={25} />
+    </TooltipIcon>
+    <TooltipIcon
+      label={"Remote access"}
+      onclick={() => (isRemoteAccessOpen = true)}
+    >
+      <QrCodeIcon size={25} />
     </TooltipIcon>
     <TooltipIcon label={"Label history"} onclick={() => {}}>
       <ClockCountdown size={25} />
@@ -153,7 +156,7 @@
           type="text"
           size="10"
           placeholder={"Title Here"}
-      bind:value={config.title_label}
+      bind:value={title_label}
           style={`width: ${titleWidthPx}px`}
         />
       {/if}
@@ -188,7 +191,10 @@
           <div class="bottom-group">
             <TooltipIcon
               label={"Edit Configuration"}
-              onclick={() => (config.is_editing = true)}
+              onclick={() => {
+                title_label = config.title_label;
+                config.is_editing = true;
+              }}
             >
               <PencilSimple size={25} />
             </TooltipIcon>
@@ -207,12 +213,13 @@
 
   <MenuDialog bind:isOpen={isMenuOpen} />
   <CryoCheck bind:isOpen={isCryoCheckOpen} />
+  <RemoteAccessDialog bind:isOpen={isRemoteAccessOpen} />
   <!-- Hidden measurement element to compute exact width including padding/border -->
   <span
     class="input-label measure"
     aria-hidden="true"
     bind:this={measureEl}
-  >{config.title_label}</span>
+  >{title_label}</span>
 </main>
 
 <style>

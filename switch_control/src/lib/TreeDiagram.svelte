@@ -39,7 +39,8 @@
 
   function updateScale(tree_state: TreeState) {
     // const state = buttons_state[3].value; // Assuming idx 3 corresponds to R4_top
-    Object.entries(tree_state).forEach(([key, value], index) => {
+    Object.entries(tree_state).forEach(([, value], index) => {
+      if (typeof value === "number") return;
       if (index < tweens.length) {
         tweens[index].target = value.pos ? -1 : 1;
       }
@@ -58,9 +59,9 @@
     updateScale(tree_state);
   });
 
-  function handleMouseEnter(event, switchId: number) {
+  function handleMouseEnter(event: MouseEvent, switchId: number) {
     showOverlay = true;
-    const rect = event.target.getBoundingClientRect();
+    const rect = (event.currentTarget as Element).getBoundingClientRect();
     overlayPosition = {
       top: rect.top + window.scrollY,
       left: rect.left + window.scrollX,
@@ -70,21 +71,23 @@
     console.log("setting overlay switch_name", switch_name);
   }
 
-  function handleMouseLeave(event) {
+  function isOutsideSwitch(event: MouseEvent) {
+    const related = event.relatedTarget;
+    return !(related instanceof Element) ||
+      (!related.closest(".pos") && !related.closest("circle"));
+  }
+
+  function handleMouseLeave(event: MouseEvent) {
     if (
-      !event.relatedTarget ||
-      (!event.relatedTarget.closest(".pos") &&
-        !event.relatedTarget.closest("circle"))
+      isOutsideSwitch(event)
     ) {
       showOverlay = false;
     }
   }
 
-  function handleFigureMouseLeave(event) {
+  function handleFigureMouseLeave(event: MouseEvent) {
     if (
-      !event.relatedTarget ||
-      (!event.relatedTarget.closest(".pos") &&
-        !event.relatedTarget.closest("circle"))
+      isOutsideSwitch(event)
     ) {
       showOverlay = false;
     }
@@ -94,11 +97,9 @@
     showOverlay = true;
   }
 
-  function handleOverlayMouseLeave(event) {
+  function handleOverlayMouseLeave(event: MouseEvent) {
     if (
-      !event.relatedTarget ||
-      (!event.relatedTarget.closest(".pos") &&
-        !event.relatedTarget.closest("circle"))
+      isOutsideSwitch(event)
     ) {
       showOverlay = false;
     }

@@ -1,0 +1,5 @@
+enabled: false
+function_gen: true
+# Set a fixed value to keep the same remote-access passphrase across restarts.
+# Leave null to generate a new 12-character passphrase each time the app starts.
+remote_access_passphrase: null

@@ -5,13 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi[standard]>=0.115.7",
+    "lab-link>=0.4.0",
+    "psutil>=7.2.2",
     "pyobjc>=11.1 ; sys_platform != 'linux'",
     "pyserial>=3.5",
     "pyvisa>=1.15.0",
     "pyvisa-py>=0.8.0",
     "pywebview[qt5]>=6.0 ; sys_platform == 'linux'",
     "pywebview[qt]>=6.0 ; sys_platform != 'linux'",
+    "pyyaml>=6.0.3",
     "requests>=2.32.3",
     "sqlmodel>=0.0.24",
+    "uvicorn>=0.51.0",
 ]
