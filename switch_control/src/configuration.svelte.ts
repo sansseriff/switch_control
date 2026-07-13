@@ -1,4 +1,4 @@
-import type { ButtonLabelState } from "./types";
+import type { ButtonLabelState, ConfigurationHistoryItem } from "./types";
 import { appState, runtime } from "./sync.svelte";
 
 const defaultLabels: ButtonLabelState = {
@@ -27,6 +27,28 @@ class Configuration {
     await runtime.sendCommand("update_configuration", {
       labels,
       title_label: titleLabel,
+    });
+  }
+
+  async stash(): Promise<ConfigurationHistoryItem> {
+    const response = await runtime.sendCommand<ConfigurationHistoryItem>(
+      "stash_configuration",
+    );
+    if (!response.result)
+      throw new Error("The server did not save the configuration.");
+    return response.result;
+  }
+
+  async history(): Promise<ConfigurationHistoryItem[]> {
+    const response = await runtime.sendCommand<ConfigurationHistoryItem[]>(
+      "list_configuration_history",
+    );
+    return response.result ?? [];
+  }
+
+  async load(configurationId: number): Promise<void> {
+    await runtime.sendCommand("load_configuration", {
+      configuration_id: configurationId,
     });
   }
 }

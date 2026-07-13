@@ -44,37 +44,20 @@ else
 fi
 
 echo "Setting up web assets..."
-echo 
-echo -e "${PURPLE}Do you want to download pre-built html/javascript files for the user interface, or install the tooling to modify and build these files?${NC}"
-echo -e "${PURPLE}1) Download pre-built files${NC}"
-echo -e "${PURPLE}2) Install tooling (Bun javascipt runtime) for building svelte-based UI (for development)${NC}"
-
-read -p "Enter your choice (1 or 2): " web_choice
-
-# Create the target directory if it doesn't exist
-mkdir -p ./backend/backend/switch_web
-
-if [ "$web_choice" = "1" ]; then
-    echo "Downloading pre-built web assets..."
-    curl -L https://github.com/sansseriff/switch_control/releases/latest/download/switch_web.zip -o switch_web.zip
-    unzip -o switch_web.zip -d ./backend/backend/
-    rm switch_web.zip
-    echo "Web assets downloaded successfully"
-elif [ "$web_choice" = "2" ]; then
-    echo "Installing Bun for web development..."
+if ! command -v bun &> /dev/null; then
+    echo "Installing Bun..."
     curl -fsSL https://bun.sh/install | bash
-    export PATH="$HOME/.bun/bin:$PATH"  # Add Bun to PATH for this script
-    
-    echo "Installing and building web assets..."
-    cd switch_control
-    bun install
-    bun run buildall
-    cd ..
-    echo "Web assets built successfully"
+    export PATH="$HOME/.bun/bin:$PATH"
 else
-    echo "Invalid choice. Exiting..."
-    exit 1
+    echo "Bun is already installed"
 fi
+
+echo "Installing and building web assets..."
+cd switch_control
+bun install
+bun run buildall
+cd ..
+echo "Web assets built successfully"
 
 # Print colored instructions
 GREEN='\033[0;32m'

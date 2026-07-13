@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
+from datetime import timezone
 import html
 import mimetypes
 import multiprocessing
 from multiprocessing.connection import Connection
 from pathlib import Path
+import signal
 import socket
 import tempfile
 import threading
@@ -17,9 +19,11 @@ from typing import Any
 from lab_link import (
     CommandContext,
     CommandError,
+    InviteEvent,
     LabSync,
     LanPassphraseAuth,
     ReactiveModel,
+    SQLiteAuthStore,
 )
 import psutil
 from pydantic import Field
@@ -37,7 +41,14 @@ import webview
 import yaml
 
 from ampProtector import AmpProtector
-from db import ButtonLabels, Settings, TreeState, create_db_and_tables, engine
+from db import (
+    ButtonLabels,
+    ConfigurationSnapshot,
+    Settings,
+    TreeState,
+    create_db_and_tables,
+    engine,
+)
 from location import BASE_DIR, WEB_DIR
 from models import (
     ButtonLabelsBase,
@@ -68,9 +79,9 @@ def _read_system_config() -> dict[str, Any]:
         return yaml.safe_load(file) or {}
 
 
-configured_remote_passphrase = _read_system_config().get("remote_access_passphrase")
+auth_store = SQLiteAuthStore("switch_control_auth.db")
 remote_access = LanPassphraseAuth(
-    passphrase=str(configured_remote_passphrase) if configured_remote_passphrase else None,
+    store=auth_store,
     cookie_name="switch_control_session",
     allowed_origins={
         "http://127.0.0.1:5173",
@@ -80,6 +91,13 @@ remote_access = LanPassphraseAuth(
         "tauri://localhost",
     },
 )
+
+# Migrate the old system-settings passphrase once, if one was configured. After
+# that the persistent auth store is authoritative, so rotating the passphrase
+# does not require editing a configuration file.
+legacy_remote_passphrase = _read_system_config().get("remote_access_passphrase")
+if not remote_access.configured and legacy_remote_passphrase:
+    remote_access.setup_passphrase(str(legacy_remote_passphrase))
 
 
 class ReactiveSwitchState(ReactiveModel):
@@ -127,6 +145,11 @@ class ReactivePulseGeneratorInfo(ReactiveModel):
     message: str | None = None
 
 
+class ReactiveRemoteAccessState(ReactiveModel):
+    invite_id: str | None = None
+    invite_status: str = "idle"
+
+
 class AppState(ReactiveModel):
     tree_state: ReactiveTreeState = Field(default_factory=ReactiveTreeState)
     button_labels: ReactiveButtonLabels = Field(default_factory=ReactiveButtonLabels)
@@ -134,10 +157,23 @@ class AppState(ReactiveModel):
     pulse_generator: ReactivePulseGeneratorInfo = Field(
         default_factory=ReactivePulseGeneratorInfo
     )
+    remote_access: ReactiveRemoteAccessState = Field(
+        default_factory=ReactiveRemoteAccessState
+    )
 
 
 sync = LabSync(auth=remote_access)
 state = sync.bind_state(AppState())
+
+
+def _publish_invite_status(event: InviteEvent) -> None:
+    """Publish lifecycle state, never the one-use invitation credential."""
+    with sync.batch():
+        state.remote_access.invite_id = event.invite_id
+        state.remote_access.invite_status = event.status
+
+
+remote_access.on_invite_event(_publish_invite_status)
 
 
 class CryoRelayManager:
@@ -326,6 +362,77 @@ def _persist_labels() -> None:
         session.commit()
 
 
+def _persist_configuration() -> None:
+    """Persist the current title and labels in one database transaction."""
+    with Session(engine) as session:
+        labels_row = session.exec(
+            select(ButtonLabels).where(ButtonLabels.id == 1)
+        ).one_or_none()
+        labels_data = state.button_labels.model_dump(mode="json")
+        if labels_row is None:
+            labels_row = ButtonLabels(id=1, **labels_data)
+        else:
+            for key, value in labels_data.items():
+                setattr(labels_row, key, value)
+
+        settings_row = session.exec(
+            select(Settings).where(Settings.id == 1)
+        ).one_or_none()
+        settings_data = state.settings.model_dump(mode="json")
+        if settings_row is None:
+            settings_row = Settings(id=1, **settings_data)
+        else:
+            for key, value in settings_data.items():
+                setattr(settings_row, key, value)
+
+        session.add(labels_row)
+        session.add(settings_row)
+        session.commit()
+
+
+def _stash_current_configuration() -> dict[str, Any]:
+    with Session(engine) as session:
+        snapshot = ConfigurationSnapshot(
+            title_label=state.settings.title_label,
+            **state.button_labels.model_dump(mode="json"),
+        )
+        session.add(snapshot)
+        session.commit()
+        session.refresh(snapshot)
+        return _configuration_snapshot_dict(snapshot)
+
+
+def _configuration_snapshot_dict(snapshot: ConfigurationSnapshot) -> dict[str, Any]:
+    created_at = snapshot.created_at
+    # SQLite may return a timezone-naive value even though we save UTC.
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return {
+        "id": snapshot.id,
+        "title_label": snapshot.title_label,
+        "created_at": created_at.isoformat(),
+        "labels": ButtonLabelsBase.model_validate(snapshot).model_dump(mode="json"),
+    }
+
+
+def _list_configuration_history() -> list[dict[str, Any]]:
+    with Session(engine) as session:
+        snapshots = session.exec(
+            select(ConfigurationSnapshot)
+            .order_by(ConfigurationSnapshot.created_at.desc())
+        ).all()
+        return [_configuration_snapshot_dict(snapshot) for snapshot in snapshots]
+
+
+def _get_configuration_snapshot(snapshot_id: int) -> ConfigurationSnapshot | None:
+    with Session(engine) as session:
+        snapshot = session.get(ConfigurationSnapshot, snapshot_id)
+        if snapshot is None:
+            return None
+        # Detach the values used after the session closes.
+        return ConfigurationSnapshot.model_validate(snapshot.model_dump())
+
+
 async def _prepare_switching(verification: Verification) -> None:
     manager = cryo_manager()
     await asyncio.to_thread(manager.turn_off_amp)
@@ -430,7 +537,7 @@ async def preemptive_amp_shutoff(ctx: CommandContext) -> None:
         await asyncio.to_thread(cryo_manager().turn_off_amp)
 
 
-@sync.command
+@sync.command(requires={"manage_access"})
 def get_server_info(ctx: CommandContext) -> dict[str, Any]:
     """Return every non-loopback IPv4 address that can serve the remote UI."""
     ipaddrs: list[str] = []
@@ -447,15 +554,11 @@ def get_server_info(ctx: CommandContext) -> dict[str, Any]:
     if not ipaddrs:
         ipaddrs = ["127.0.0.1"]
 
-    invite = remote_access.create_invite()
     return {
         "hostname": socket.gethostname(),
         "ipaddr": ipaddrs[0],
         "ipaddrs": ipaddrs,
         "port": SERVE_PORT,
-        "passphrase": remote_access.passphrase,
-        "invite": invite.token,
-        "invite_expires_at": invite.expires_at.isoformat(),
     }
 
 
@@ -480,8 +583,40 @@ async def update_configuration(
             validated.model_dump(mode="json")
         )
         state.settings.title_label = title_label
-    await asyncio.to_thread(_persist_labels)
-    await asyncio.to_thread(_persist_settings)
+    await asyncio.to_thread(_persist_configuration)
+
+
+@sync.command
+async def stash_configuration(ctx: CommandContext) -> dict[str, Any]:
+    """Add the current title and labels to configuration history."""
+    return await asyncio.to_thread(_stash_current_configuration)
+
+
+@sync.command
+async def list_configuration_history(
+    ctx: CommandContext,
+) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(_list_configuration_history)
+
+
+@sync.command
+async def load_configuration(ctx: CommandContext, configuration_id: int) -> None:
+    snapshot = await asyncio.to_thread(
+        _get_configuration_snapshot, configuration_id
+    )
+    if snapshot is None:
+        raise CommandError(
+            code="configuration_not_found",
+            message="That saved configuration no longer exists.",
+        )
+
+    labels = ButtonLabelsBase.model_validate(snapshot)
+    with sync.batch():
+        state.button_labels = ReactiveButtonLabels.model_validate(
+            labels.model_dump(mode="json")
+        )
+        state.settings.title_label = snapshot.title_label
+    await asyncio.to_thread(_persist_configuration)
 
 
 @sync.command
@@ -567,7 +702,9 @@ def _login_page(error: str = "") -> HTMLResponse:
     h1 { margin: 0 0 .45rem; font-size: 1.2rem; }
     p { color: #6b7280; font-size: .86rem; line-height: 1.4; }
     label { display: block; margin: 1rem 0 .35rem; font-size: .82rem; font-weight: 600; }
-    input { box-sizing: border-box; width: 100%; padding: .62rem .7rem; border: 1.5px solid #dfe2e9; border-radius: .3rem; font: inherit; letter-spacing: .04em; }
+    input[type=password] { box-sizing: border-box; width: 100%; padding: .62rem .7rem; border: 1.5px solid #dfe2e9; border-radius: .3rem; font: inherit; letter-spacing: .04em; }
+    .remember { display: flex; align-items: center; gap: .45rem; margin: .75rem 0 0; font-weight: 400; }
+    .remember input { margin: 0; }
     button { width: 100%; margin-top: .7rem; padding: .62rem; border: 1.5px solid #534deb; border-radius: .3rem; background: #534deb; color: white; font: inherit; cursor: pointer; }
     .error { color: #b42318; background: #fff1f0; border-radius: .3rem; padding: .5rem .6rem; }
     .note { margin-bottom: 0; font-size: .75rem; }
@@ -576,11 +713,12 @@ def _login_page(error: str = "") -> HTMLResponse:
 <body>
   <main>
     <h1>Switch Control</h1>
-    <p>Enter the remote-access passphrase shown on the host computer.</p>
+    <p>Enter the persistent master passphrase configured on the instrument.</p>
     __ERROR__
     <form id="login" action="/sync/auth/login" method="post">
       <label for="passphrase">Access passphrase</label>
       <input id="passphrase" name="passphrase" type="password" autocomplete="current-password" required autofocus />
+      <label class="remember"><input id="remember" type="checkbox" checked /> Remember this device for 30 days</label>
       <button type="submit">Open Switch Control</button>
     </form>
     <p class="note">Use only on a trusted network. This local HTTP connection is not encrypted.</p>
@@ -595,6 +733,8 @@ def _login_page(error: str = "") -> HTMLResponse:
       if (code === "invalid_credentials") return "That passphrase was not accepted.";
       if (code === "invalid_or_expired_invite") return "This access link has expired or has already been used.";
       if (code === "rate_limited") return "Too many attempts. Wait one minute and try again.";
+      if (code === "setup_required") return "Remote access must first be configured on the instrument computer.";
+      if (code === "origin_not_allowed") return "This address is not permitted to authenticate with the instrument.";
       return "Remote access could not be authenticated.";
     }
 
@@ -614,6 +754,8 @@ def _login_page(error: str = "") -> HTMLResponse:
       event.preventDefault();
       authenticate("/sync/auth/login", {
         passphrase: document.getElementById("passphrase").value,
+        remember: document.getElementById("remember").checked,
+        deviceName: navigator.userAgent.includes("Mobile") ? "Mobile browser" : "Web browser",
       }).catch((cause) => {
         error.textContent = cause.message;
         form.before(error);
@@ -623,7 +765,11 @@ def _login_page(error: str = "") -> HTMLResponse:
     const invite = new URLSearchParams(location.hash.slice(1)).get("invite");
     if (invite) {
       history.replaceState(null, "", location.pathname + location.search);
-      authenticate("/sync/auth/invite", { invite }).catch((cause) => {
+      authenticate("/sync/auth/invite", {
+        invite,
+        remember: true,
+        deviceName: navigator.userAgent.includes("Mobile") ? "Mobile browser" : "Web browser",
+      }).catch((cause) => {
         error.textContent = cause.message;
         form.before(error);
       });
@@ -662,6 +808,10 @@ app = Starlette(routes=routes, lifespan=lifespan)
 
 
 def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False) -> None:
+    # The parent process owns application shutdown.  Without this, Ctrl-C is
+    # delivered to the webview child as well and it can exit before the parent
+    # has had a chance to clean up the server and hardware.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     time.sleep(0.3)
 
     def on_closed() -> None:
@@ -680,15 +830,44 @@ def start_window(pipe_send: Connection, url_to_load: str, debug: bool = False) -
     webview.start(storage_path=tempfile.mkdtemp(), debug=debug)
 
 
+class ParentControlledServer(Server):
+    @contextmanager
+    def capture_signals(self):
+        # Signals for this application are coordinated by the parent process.
+        # Uvicorn's default handler would independently shut this child down
+        # when Ctrl-C is delivered to the whole foreground process group.
+        yield
+
+
 class UvicornServer(multiprocessing.Process):
     def __init__(self, config: Config):
         super().__init__()
-        self.server = Server(config=config)
+        self.server = ParentControlledServer(config=config)
+        self.shutdown_requested = multiprocessing.Event()
 
-    def stop(self) -> None:
-        self.terminate()
+    def stop(self, timeout: float = 10.0) -> None:
+        """Ask Uvicorn to run its lifespan shutdown, then enforce a deadline."""
+        if not self.is_alive():
+            self.join()
+            return
+
+        self.shutdown_requested.set()
+        self.join(timeout)
+        if self.is_alive():
+            self.terminate()
+            self.join(2.0)
 
     def run(self) -> None:
+        # Ctrl-C is sent to every process in the foreground process group.  Let
+        # only the parent handle it; otherwise Uvicorn re-raises SIGINT after
+        # its own cleanup and multiprocessing prints a KeyboardInterrupt trace.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+        def request_shutdown() -> None:
+            self.shutdown_requested.wait()
+            self.server.should_exit = True
+
+        threading.Thread(target=request_shutdown, daemon=True).start()
         self.server.run()
 
 
@@ -717,7 +896,24 @@ if __name__ == "__main__":
         args=(conn_send, f"http://localhost:{server_port}/", args.debug),
     )
     window_process.start()
-    window_status = ""
-    while "closed" not in window_status:
-        window_status = conn_recv.recv()
-    server.stop()
+    try:
+        window_status = ""
+        while "closed" not in window_status:
+            if conn_recv.poll(0.25):
+                window_status = conn_recv.recv()
+            elif not server.is_alive() or not window_process.is_alive():
+                break
+    except (EOFError, KeyboardInterrupt):
+        # The finally block performs the same orderly shutdown whether the
+        # window closes, a child exits unexpectedly, or the user presses Ctrl-C.
+        pass
+    finally:
+        server.stop()
+
+        window_process.join(1.0)
+        if window_process.is_alive():
+            window_process.terminate()
+            window_process.join(2.0)
+
+        conn_recv.close()
+        conn_send.close()

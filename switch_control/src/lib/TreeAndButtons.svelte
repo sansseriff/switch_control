@@ -162,7 +162,7 @@
 </script>
 
 <div class="centering-container">
-  <div class="container">
+  <div class="container" class:editing={props.isEditing}>
     <div class="tree"><TreeDiagram tree_state={tree.st} /></div>
     <div class="buttons">
       {#each { length: 8 } as _, idx}
@@ -205,7 +205,11 @@
           <GeneralButton onclick={defaultChannelLabels} width_rem={7}>
             Default Labels
           </GeneralButton>
-          <GeneralButton onclick={finishChannelEdit} width_rem={7}>
+          <GeneralButton
+            onclick={finishChannelEdit}
+            width_rem={7}
+            highlighted
+          >
             Finish
           </GeneralButton>
         </div>
@@ -304,5 +308,70 @@
   .tree {
     padding-top: 0.45rem;
     padding-bottom: 0.3rem;
+  }
+
+  @media (max-width: 500px) {
+    .centering-container {
+      width: 100%;
+    }
+
+    .tree {
+      display: none;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1fr;
+      width: 100%;
+    }
+
+    .buttons {
+      grid-area: 1 / 1;
+      justify-self: center;
+      height: 315px;
+    }
+
+    .button-spacer {
+      grid-area: 1 / 1;
+      justify-self: end;
+    }
+
+    .container.editing {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      height: auto;
+    }
+
+    .container.editing .buttons {
+      flex: 0 0 315px;
+      width: auto;
+    }
+
+    .container.editing input {
+      max-width: calc(100vw - 4rem);
+    }
+
+    .container.editing .button-spacer {
+      width: 100%;
+      padding-left: 0;
+    }
+
+    .container.editing .button-group {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.5rem;
+      width: calc(100% - 2rem);
+      max-width: 22rem;
+      height: auto;
+      margin: 0 auto;
+    }
+
+    .container.editing .button-group :global(button) {
+      width: 100% !important;
+      font-size: 0.8rem;
+    }
   }
 </style>

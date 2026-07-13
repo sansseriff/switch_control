@@ -40,6 +40,13 @@ export interface ButtonLabelState {
   label_7: string;
 }
 
+export interface ConfigurationHistoryItem {
+  id: number;
+  title_label: string;
+  created_at: string;
+  labels: ButtonLabelState;
+}
+
 export interface ButtonState {
   name: string;
   proxy_name: string;
@@ -68,10 +75,19 @@ export interface PulseGeneratorInfo {
   message: string | null;
 }
 
+export type InviteStatus =
+  "idle" | "active" | "consumed" | "expired" | "revoked";
+
+export interface RemoteAccessState {
+  invite_id: string | null;
+  invite_status: InviteStatus;
+}
+
 export interface AppState {
   [key: string]: unknown;
   tree_state: TreeState;
   button_labels: ButtonLabelState;
   settings: Settings;
   pulse_generator: PulseGeneratorInfo;
+  remote_access: RemoteAccessState;
 }

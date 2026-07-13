@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
@@ -12,6 +13,16 @@ from sqlalchemy import text
 # Define the SQLModel for the database, inheriting from the base and adding the ID
 class ButtonLabels(SQLModel, ButtonLabelsBase, table=True):
     id: Optional[int] = Field(default=1, primary_key=True)
+
+
+class ConfigurationSnapshot(SQLModel, ButtonLabelsBase, table=True):
+    """A named, append-only copy of the user-visible configuration."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title_label: str = "Title Here"
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc), index=True
+    )
 
 
 class InitializationResponse(BaseModel):

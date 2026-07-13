@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { Gear } from "phosphor-svelte";
-  import { ClockCountdown } from "phosphor-svelte";
-  import { Plus } from "phosphor-svelte";
-  import { PencilSimple } from "phosphor-svelte";
-  import { ThermometerSimple, ThermometerCold } from "phosphor-svelte";
+  import { GearIcon } from "phosphor-svelte";
+  import { ClockCountdownIcon } from "phosphor-svelte";
+  import { PencilSimpleIcon } from "phosphor-svelte";
+  import { ThermometerSimpleIcon, ThermometerColdIcon } from "phosphor-svelte";
   import { QrCodeIcon } from "phosphor-svelte";
 
   import { onMount } from "svelte";
@@ -16,11 +15,15 @@
   import TooltipIcon from "./lib/TooltipIcon.svelte";
   import CryoCheck from "./lib/CryoCheck.svelte";
   import RemoteAccessDialog from "./lib/RemoteAccessDialog.svelte";
+  import ConfigurationHistoryDialog from "./lib/ConfigurationHistoryDialog.svelte";
+  import NewConfigurationPopover from "./lib/NewConfigurationPopover.svelte";
+  import { authClient } from "./sync.svelte";
 
   let isLoading = $state(import.meta.env.SKIP_LOADING !== "true");
   let isMenuOpen = $state(false);
   let isCryoCheckOpen = $state(false);
   let isRemoteAccessOpen = $state(false);
+  let isConfigurationHistoryOpen = $state(false);
   let inactivityMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
   let inactivityTimer: any = null;
 
@@ -33,16 +36,17 @@
 
   function recomputeTitleWidth() {
     // Use placeholder text when empty so the control doesn't collapse
-    const text = (title_label && title_label.trim() !== "")
-      ? title_label
-      : "Title Here";
+    const text =
+      title_label && title_label.trim() !== "" ? title_label : "Title Here";
     if (!measureEl) return;
     // Update the hidden measurement element's text then read its width
     measureEl.textContent = text;
     // Include a small ceil to avoid sub-pixel clipping
     const measured = Math.ceil(measureEl.offsetWidth);
     // Minimum width similar to prior ~5rem default for stability
-    const rootFs = parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+    const rootFs = parseFloat(
+      getComputedStyle(document.documentElement).fontSize || "16",
+    );
     const minPx = 5 * (Number.isNaN(rootFs) ? 16 : rootFs);
     titleWidthPx = Math.max(minPx, measured);
   }
@@ -52,9 +56,15 @@
     const onActivity = () => resetInactivityTimer();
 
     (async () => {
+      try {
+        const authStatus = await authClient.status();
+        if (!authStatus.configured) isRemoteAccessOpen = true;
+      } catch (error) {
+        console.error("Could not check remote-access setup:", error);
+      }
       // await new Promise((resolve) => setTimeout(resolve, 1));
-  await tree.init();
-  title_label = config.title_label; // keep local alias in sync for width calc
+      await tree.init();
+      title_label = config.title_label; // keep local alias in sync for width calc
       // even though I don't use the ouptut of tree.init(), its important that
       // that it returns a promise. Because awaiting that promise delays the
       // setting of isLoading to false. If isLoading is set to false too soon,
@@ -62,8 +72,8 @@
       // api calls to get_tree before the tree is initialized. Causing an error.
       if (disposed) return;
       isLoading = false;
-  // Ensure initial width is computed once fonts/styles have applied
-  recomputeTitleWidth();
+      // Ensure initial width is computed once fonts/styles have applied
+      recomputeTitleWidth();
 
       // start inactivity monitor after init
       resetInactivityTimer();
@@ -71,8 +81,8 @@
       window.addEventListener("mousemove", onActivity);
       window.addEventListener("keydown", onActivity);
       window.addEventListener("pointerdown", onActivity);
-  window.addEventListener("scroll", onActivity, { passive: true });
-  window.addEventListener("resize", recomputeTitleWidth);
+      window.addEventListener("scroll", onActivity, { passive: true });
+      window.addEventListener("resize", recomputeTitleWidth);
     })();
 
     return () => {
@@ -81,7 +91,7 @@
       window.removeEventListener("keydown", onActivity);
       window.removeEventListener("pointerdown", onActivity);
       window.removeEventListener("scroll", onActivity);
-  window.removeEventListener("resize", recomputeTitleWidth);
+      window.removeEventListener("resize", recomputeTitleWidth);
       if (inactivityTimer) clearTimeout(inactivityTimer);
     };
   });
@@ -126,6 +136,11 @@
       // Stay in edit mode on error
     }
   }
+
+  function startEditing() {
+    title_label = config.title_label;
+    config.is_editing = true;
+  }
 </script>
 
 <main>
@@ -133,7 +148,7 @@
   <div class="top-bar pywebview-drag-region"></div> -->
   <div class="top-menu-section">
     <TooltipIcon label={"Runtime settings"} onclick={() => (isMenuOpen = true)}>
-      <Gear size={25} />
+      <GearIcon size={25} />
     </TooltipIcon>
     <TooltipIcon
       label={"Remote access"}
@@ -141,22 +156,27 @@
     >
       <QrCodeIcon size={25} />
     </TooltipIcon>
-    <TooltipIcon label={"Label history"} onclick={() => {}}>
-      <ClockCountdown size={25} />
+    <TooltipIcon
+      label={"Label history"}
+      onclick={() => (isConfigurationHistoryOpen = true)}
+    >
+      <ClockCountdownIcon size={25} />
     </TooltipIcon>
   </div>
 
   <div class="main-content">
     <div class="title-holder">
-    {#if !config.is_editing}
-        <h2 class="input-label" style={`width: ${titleWidthPx}px`}>{title_label}</h2>
+      {#if !config.is_editing}
+        <h2 class="input-label" style={`width: ${titleWidthPx}px`}>
+          {title_label}
+        </h2>
       {:else}
         <input
           class="input-label light"
           type="text"
           size="10"
           placeholder={"Title Here"}
-      bind:value={title_label}
+          bind:value={title_label}
           style={`width: ${titleWidthPx}px`}
         />
       {/if}
@@ -164,9 +184,9 @@
       <div class="top-group">
         <div class="icon-holder">
           {#if tree.cryo_mode}
-            <ThermometerCold size={25} style="color: #4d79ff;" />
+            <ThermometerColdIcon size={25} style="color: #4d79ff;" />
           {:else}
-            <ThermometerSimple size={25} style="color: black;" />
+            <ThermometerSimpleIcon size={25} style="color: black;" />
           {/if}
         </div>
       </div>
@@ -182,28 +202,17 @@
           <TreeAndButtons
             labels={config.button_labels}
             isEditing={config.is_editing}
-            onFinishConfiguration={onFinishConfiguration}
+            {onFinishConfiguration}
           />
           <div class="title-spacer"></div>
           <!-- <div class="title-holder"></div> -->
         </div>
-        <div class="spacer">
+        <div class="spacer" class:editing={config.is_editing}>
           <div class="bottom-group">
-            <TooltipIcon
-              label={"Edit Configuration"}
-              onclick={() => {
-                title_label = config.title_label;
-                config.is_editing = true;
-              }}
-            >
-              <PencilSimple size={25} />
+            <TooltipIcon label={"Edit Configuration"} onclick={startEditing}>
+              <PencilSimpleIcon size={25} />
             </TooltipIcon>
-            <TooltipIcon
-              label={"New Configuration"}
-              onclick={() => (isMenuOpen = true)}
-            >
-              <Plus size={25} />
-            </TooltipIcon>
+            <NewConfigurationPopover onStartEditing={startEditing} />
           </div>
         </div>
         <!-- </div> -->
@@ -214,12 +223,11 @@
   <MenuDialog bind:isOpen={isMenuOpen} />
   <CryoCheck bind:isOpen={isCryoCheckOpen} />
   <RemoteAccessDialog bind:isOpen={isRemoteAccessOpen} />
+  <ConfigurationHistoryDialog bind:isOpen={isConfigurationHistoryOpen} />
   <!-- Hidden measurement element to compute exact width including padding/border -->
-  <span
-    class="input-label measure"
-    aria-hidden="true"
-    bind:this={measureEl}
-  >{title_label}</span>
+  <span class="input-label measure" aria-hidden="true" bind:this={measureEl}
+    >{title_label}</span
+  >
 </main>
 
 <style>
@@ -342,21 +350,19 @@
     appearance: none;
 
     box-sizing: border-box;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 0.25rem;
 
-  padding-left: 0.2rem;
-  padding-right: 0.2rem;
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
     height: 1.7rem;
 
     width: 5rem;
     font-family: Arial, Helvetica, sans-serif;
   }
-
-  
 
   .light:hover {
     color: #181d25;
@@ -368,9 +374,9 @@
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
-  /* Keep as a single line and avoid flexbox shrinking */
-  white-space: nowrap;
-  flex: 0 0 auto;
+    /* Keep as a single line and avoid flexbox shrinking */
+    white-space: nowrap;
+    flex: 0 0 auto;
 
     /* Typography unified for both input and h2 */
     font-family: Arial, Helvetica, sans-serif;
@@ -398,8 +404,8 @@
 
   .light {
     color: #6b7280;
-  /* Always show the border in edit mode */
-   border: 1.5px solid #dfe2e9; /* slightly stronger than #dfe2e9 */
+    /* Always show the border in edit mode */
+    border: 1.5px solid #dfe2e9; /* slightly stronger than #dfe2e9 */
     background-color: #ffffff;
   }
 
@@ -439,7 +445,30 @@
 
     .main-content {
       flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .else {
+      position: relative;
+      align-items: center;
+    }
+
+    .inside {
+      width: 100%;
+    }
+
+    .else > .spacer {
+      position: absolute;
+      right: 0.3rem;
+      bottom: 0.3rem;
+      width: 2.8rem;
       height: auto;
+      margin: 0;
+    }
+
+    .else > .spacer.editing {
+      display: none;
     }
 
     .top-menu-section {

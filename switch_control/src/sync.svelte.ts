@@ -1,14 +1,18 @@
+import { AuthClient } from "lab-link/auth";
 import { createSyncRuntime, useSyncState } from "lab-link/svelte";
 import type { AppState } from "./types";
 
-function websocketUrl() {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const isLocalDevServer = ["5173", "1420"].includes(window.location.port);
-  const host = isLocalDevServer
-    ? `${window.location.hostname || "localhost"}:8854`
-    : window.location.host;
-  return `${protocol}//${host}/sync/ws`;
+export function serverBaseUrl() {
+  return window.location.origin;
 }
+
+function websocketUrl() {
+  const base = new URL(serverBaseUrl());
+  const protocol = base.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${base.host}/sync/ws`;
+}
+
+export const authClient = new AuthClient({ baseUrl: serverBaseUrl() });
 
 export const runtime = createSyncRuntime<AppState>({
   url: websocketUrl(),

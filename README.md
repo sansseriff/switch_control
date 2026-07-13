@@ -18,13 +18,20 @@ The browser receives snapshots and reactive JSON patches over lab-link's
 WebSocket and sends hardware operations as lab-link commands. There are no
 REST polling or server-sent-event state paths.
 
-Remote access is protected by a startup passphrase. QR/copy URLs carry the
-passphrase in the URL fragment; the login page exchanges it for a 12-hour
-HttpOnly, SameSite session cookie and removes it from the address bar before
-loading the UI. Plain LAN URLs show the passphrase form, and unauthenticated
-WebSocket connections are rejected before lab-link sends application state.
-Set `remote_access_passphrase` in `backend/backend/system_settings.yml` for a
-stable passphrase, or leave it null to generate a new one on each startup.
+Remote access uses lab-link's persistent authorization workflow. On first run,
+the host UI asks for a master passphrase and stores only its Argon2id hash in
+`switch_control_auth.db`. The passphrase remains the manual recovery path
+across restarts. A successful login creates an HttpOnly, SameSite browser
+session; the login screen can remember a device for 30 days.
+
+The Remote Access dialog issues single-use, five-minute invitation URLs for QR
+codes and copyable links. The credential stays in the URL fragment, is removed
+from browser history during exchange, and is never placed in shared reactive
+state. Only its safe lifecycle status is synchronized, so consumed, expired,
+or revoked links are disabled without polling. Unauthenticated WebSockets are
+rejected before lab-link sends application state, and commands are authorized
+server-side. `remote_access_passphrase` in `system_settings.yml` is retained
+only to migrate an older fixed passphrase into a new auth database.
 
 This is a trusted-LAN convenience gate, not encrypted transport. Use HTTPS or
 a private overlay network when traffic confidentiality is required.
