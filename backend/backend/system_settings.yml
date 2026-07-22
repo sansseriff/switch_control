@@ -1,6 +1,0 @@
-enabled: false
-function_gen: true
-# Legacy migration only: if set before the auth database is created, this value
-# becomes the initial persistent passphrase. New installations configure remote
-# access in the app, and later passphrase changes are stored by lab-link.
-remote_access_passphrase: null

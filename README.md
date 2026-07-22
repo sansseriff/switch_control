@@ -1,5 +1,7 @@
 # Switch Control
 
+📖 **Documentation: [switch.snsphd.online](https://switch.snsphd.online/)** — start with the [Quickstart](https://switch.snsphd.online/quickstart/).
+
 ![switchui](./switch_ui.png)
 
 A python program and webview-based user interface for controlling a cryogenic RF switch.
@@ -42,8 +44,14 @@ Sometimes when editing the user interface, it's helpful to see changes to the co
 
 ## Installation
 
-Run this command to download and install on macos or linux:
+Clone the repo and run the setup script (macOS or Linux):
 
 ```bash
-curl -s https://switch.snsphd.online/dl.sh -o dl.sh && bash dl.sh
+git clone https://github.com/sansseriff/switch_control.git
+cd switch_control
+bash setup.sh
 ```
+
+See the [Quickstart guide](https://switch.snsphd.online/quickstart/) for the
+full walkthrough, and [Hardware configuration](https://switch.snsphd.online/configuration/)
+for setting up `system_settings.yml`.

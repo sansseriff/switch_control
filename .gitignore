@@ -4,6 +4,17 @@ backend/backend/dist/
 backend/backend/build/
 backend/backend/__pycache__/
 
+# Zensical docs build output
+site/
+
+# Per-machine hardware config; use system_settings.example.yml as the template.
+backend/backend/system_settings.yml
+
+# Local auth / sqlite databases
+backend/backend/switch_control_auth.db
+backend/backend/switch_control_auth.db-shm
+backend/backend/switch_control_auth.db-wal
+
 .vscode/
 
 .DS_Store

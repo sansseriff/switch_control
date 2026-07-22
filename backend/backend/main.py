@@ -179,12 +179,22 @@ remote_access.on_invite_event(_publish_invite_status)
 class CryoRelayManager:
     """Owns hardware resources only; live application state lives in ``state``."""
 
-    def __init__(self, enabled: bool = False, function_gen: bool = True):
+    def __init__(
+        self,
+        enabled: bool = False,
+        function_gen: bool = True,
+        sleep_time: float | None = None,
+    ):
         self.enabled = enabled
         self.lock = threading.Lock()
         if function_gen:
+            fg_kwargs: dict[str, Any] = {"generator": ClientKeysightPulseGenerator()}
+            if sleep_time is not None:
+                fg_kwargs["sleep_time"] = sleep_time
+            # The initial generator is a placeholder; lifespan() immediately swaps it
+            # for the one named in system_settings.yml via ensure_pulse_generator().
             self._pulse_controller: PulseController = FunctionGeneratorPulseController(
-                generator=ClientKeysightPulseGenerator()
+                **fg_kwargs
             )
         else:
             self._pulse_controller = SimpleRelayPulseController()
@@ -655,6 +665,24 @@ def _read_hardware_config() -> tuple[bool, bool]:
     return bool(data.get("enabled", False)), bool(data.get("function_gen", True))
 
 
+def _read_pulse_config() -> tuple[str | None, str | None, float | None]:
+    """Per-machine pulse-generator selection from system_settings.yml.
+
+    Any value left unset falls back to the persisted DB setting (kind/ip) or the
+    code default (sleep_time). This is how a given instrument declares which
+    physical pulse generator it drives without editing shared source.
+    """
+    data = _read_system_config()
+    kind = data.get("pulse_generator_kind")
+    ip = data.get("pulse_generator_ip")
+    sleep = data.get("pulse_sleep_time")
+    return (
+        str(kind) if kind else None,
+        str(ip) if ip else None,
+        float(sleep) if sleep is not None else None,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: Starlette):
     global services
@@ -662,7 +690,15 @@ async def lifespan(app: Starlette):
     create_db_and_tables()
     sync.load_state(_load_persisted_state())
     enabled, function_gen = _read_hardware_config()
-    services = await asyncio.to_thread(CryoRelayManager, enabled, function_gen)
+    pulse_kind, pulse_ip, pulse_sleep_time = _read_pulse_config()
+    # The machine's yaml, when it names a generator, overrides the persisted
+    # DB setting so a fresh install boots straight onto this instrument's hardware.
+    if pulse_kind is not None:
+        state.settings.pulse_generator_kind = pulse_kind
+        state.settings.pulse_generator_ip = pulse_ip
+    services = await asyncio.to_thread(
+        CryoRelayManager, enabled, function_gen, pulse_sleep_time
+    )
     try:
         pulse_info = await asyncio.to_thread(
             services.ensure_pulse_generator,

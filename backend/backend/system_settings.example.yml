@@ -1,0 +1,26 @@
+# Template for per-machine hardware configuration.
+# Copy this to system_settings.yml (which is gitignored) and edit for the
+# specific instrument this computer controls.
+
+# Master switch: when false, all hardware actions (relays, pulses, amp) are
+# no-ops. Keep false on any machine without the physical hardware attached.
+enabled: false
+# true  -> FunctionGeneratorPulseController (function generator drives the pulses)
+# false -> SimpleRelayPulseController
+function_gen: true
+
+# Pulse generator selected at startup (main.lifespan seeds these into settings
+# before ensure_pulse_generator runs). kind is one of:
+#   dev | keysight | client | teledyne | teledyne-client
+# The *-client kinds talk to the lab_remote_terminal_control server on localhost:8888.
+pulse_generator_kind: dev
+pulse_generator_ip: null
+
+# Sleep between relay operations in FunctionGeneratorPulseController (seconds).
+# Leave unset to use the code default (0.050).
+pulse_sleep_time: null
+
+# Legacy migration only: if set before the auth database is created, this value
+# becomes the initial persistent passphrase. New installations configure remote
+# access in the app, and later passphrase changes are stored by lab-link.
+remote_access_passphrase: null

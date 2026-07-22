@@ -138,6 +138,67 @@ class ClientKeysightPulseGenerator(PulseGenerator):
         self._impl.trigger_with_polarity(channel, amplitude, polarity)
 
 
+class TeledynePulseGenerator(PulseGenerator):
+    """Adapter around a direct VISA Teledyne T3AFG200 connection."""
+
+    def __init__(self, ip: str):
+        from teledyneT3AFG200 import teledyneT3AFG200  # type: ignore
+
+        self.ip = ip
+        self._impl = teledyneT3AFG200(ip)
+
+    def connect(self) -> None:
+        self._impl.connect()
+
+    def disconnect(self) -> None:
+        self._impl.disconnect()
+
+    def setup_pulse(self, width: float) -> None:
+        self._impl.setup_pulse(width=width)
+
+    def setup_trigger(self, channel, source: str) -> None:
+        self._impl.setup_trigger(channel, source)
+
+    def set_output(self, channel: int, enabled: int | bool) -> None:
+        self._impl.set_output(channel, int(bool(enabled)))
+
+    def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+        print(f"triggering with polarity: {polarity} and amplitude: {amplitude}")
+        self._impl.trigger_with_polarity(channel, amplitude, polarity)
+
+
+class ClientTeledynePulseGenerator(PulseGenerator):
+    """Adapter around client socket connection to a Teledyne T3AFG200 (shared VISA via server).
+
+    Wire-compatible with ClientKeysightPulseGenerator: both speak the same JSON-RPC
+    method names, and the server picks the physical backend (--keysight / --teledyne).
+    """
+
+    def __init__(self):
+        from client_teledyneT3AFG200 import ClientTeledyneT3AFG200  # type: ignore
+
+        self._impl = ClientTeledyneT3AFG200()
+
+    def connect(self) -> None:
+        self._impl.connect()
+
+    def disconnect(self) -> None:
+        self._impl.disconnect()
+
+    def setup_pulse(self, width: float) -> None:
+        self._impl.setup_pulse(width=width)
+
+    def setup_trigger(self, channel, source: str) -> None:
+        self._impl.setup_trigger(channel, source)
+
+    def set_output(self, channel: int, enabled: int | bool) -> None:
+        self._impl.set_output(channel, int(bool(enabled)))
+
+    def trigger_with_polarity(self, channel: int, amplitude: float, polarity: str) -> None:
+        print(f"triggering with polarity: {polarity} and amplitude: {amplitude}")
+        self._impl.trigger_with_polarity(channel, amplitude, polarity)
+
+
 class PulseController(ABC):
     """
     The room temperature system/apparatus that sends voltage pulses to particular
@@ -473,11 +534,16 @@ class FunctionGeneratorPulseController(PulseController):
                 print(f"Warning: pulse generator disconnect failed: {e}")
 
 
-# Registry and factory for runtime switching
+# Registry and factory for runtime switching.
+# 'client' and 'teledyne-client' both talk to the same lab_remote_terminal_control
+# server on the JSON-RPC level — the server picks the physical instrument with its
+# --keysight / --teledyne flag, so the kind here is mainly a label for the operator.
 PULSE_GENERATOR_REGISTRY: dict[str, type[PulseGenerator]] = {
     "dev": DevModePulseGenerator,
     "keysight": KeysightPulseGenerator,
     "client": ClientKeysightPulseGenerator,
+    "teledyne": TeledynePulseGenerator,
+    "teledyne-client": ClientTeledynePulseGenerator,
 }
 
 
@@ -492,4 +558,8 @@ def make_pulse_generator(kind: str, ip: str | None = None) -> PulseGenerator:
             # fall back to environment-provided IP or default
             ip = os.getenv("KEYSIGHT_33622A_IP", "10.9.0.18")
         return KeysightPulseGenerator(ip)
+    if cls is TeledynePulseGenerator:
+        if not ip:
+            ip = os.getenv("TELEDYNE_T3AFG200_IP", "10.9.0.19")
+        return TeledynePulseGenerator(ip)
     return cls()  # type: ignore[call-arg]
